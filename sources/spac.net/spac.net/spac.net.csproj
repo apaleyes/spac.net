@@ -54,6 +54,7 @@
     <Compile Include="Chapter3\SequentialArraySum.cs" />
     <Compile Include="Chapter3\SimpleDivideAndConquerArraySum.cs" />
     <Compile Include="Chapter3\WrongThreadedArraySum.cs" />
+    <Compile Include="Chapter5\SequentialPrefixSum.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
