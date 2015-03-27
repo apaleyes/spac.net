@@ -11,7 +11,7 @@ namespace spac.net.tests.Chapter3
         // This test may occasionally fail, see class comment for the reason why
         public void should_not_calculate_array_sum()
         {
-            int[] arr = System.Linq.Enumerable.Range(0, 1000).ToArray();
+            int[] arr = Enumerable.Range(0, 1000).ToArray();
 
             int sum = WrongThreadedArraySum.Sum(arr);
 

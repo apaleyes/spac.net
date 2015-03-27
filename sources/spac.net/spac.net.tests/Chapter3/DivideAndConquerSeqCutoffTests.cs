@@ -9,7 +9,7 @@ namespace spac.net.tests.Chapter3
         [Test]
         public void should_calculate_array_sum()
         {
-            int[] arr = System.Linq.Enumerable.Range(0, 1000).ToArray();
+            int[] arr = Enumerable.Range(0, 1000).ToArray();
 
             int sum = DivideAndConquerSeqCutoff.Sum(arr);
 
