@@ -1,0 +1,7 @@
+﻿A list of optional things that are not a part of the teaching notes, but can be implemented for completeness
+
+----- Chapter 5 -----
+Parallel prefix sum
+Parallel pack
+Parallel quick sort
+Parallel merge sort
