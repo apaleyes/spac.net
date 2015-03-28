@@ -56,6 +56,10 @@
     <Compile Include="Chapter3\WrongThreadedArraySum.cs" />
     <Compile Include="Chapter5\SequentialPack.cs" />
     <Compile Include="Chapter5\SequentialPrefixSum.cs" />
+    <Compile Include="Chapter6\BankAccountBoolWrong.cs" />
+    <Compile Include="Chapter6\BankAccountLockPseudocode.cs" />
+    <Compile Include="Chapter6\BankAccountSingleThread.cs" />
+    <Compile Include="Chapter6\WithdrawTooLargeException.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
@@ -63,6 +67,9 @@
   </ItemGroup>
   <ItemGroup>
     <Service Include="{82A7F48D-3B50-4B1E-B82E-3ADA8210C358}" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="todo.txt" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
