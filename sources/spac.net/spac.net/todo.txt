@@ -5,3 +5,6 @@ Parallel prefix sum
 Parallel pack
 Parallel quick sort
 Parallel merge sort
+
+----- Chapter 6 -----
+Unit tests for all BankAccount classes
