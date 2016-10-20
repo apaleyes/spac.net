@@ -63,6 +63,8 @@
     <Compile Include="Chapter6\BankAccountMethodImplSync.cs" />
     <Compile Include="Chapter6\BankAccountSingleThread.cs" />
     <Compile Include="Chapter6\WithdrawTooLargeException.cs" />
+    <Compile Include="Chapter7\Stack.cs" />
+    <Compile Include="Chapter7\StackHelpers.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
