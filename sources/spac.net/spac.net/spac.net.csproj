@@ -68,7 +68,9 @@
     <Compile Include="Chapter7\Stack.cs" />
     <Compile Include="Chapter7\StackHelpers.cs" />
     <Compile Include="Chapter7\VolatileNoDataRaces.cs" />
+    <Compile Include="Chapter8\CriticalSectionSnippets.cs" />
     <Compile Include="Chapter8\Name.cs" />
+    <Compile Include="Chapter9\BankAccount.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
