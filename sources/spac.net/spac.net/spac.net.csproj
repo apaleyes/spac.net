@@ -44,6 +44,10 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Chapter10\BufferLocksOnly.cs" />
+    <Compile Include="Chapter10\BufferRight.cs" />
+    <Compile Include="Chapter10\BufferWrongNotifyWait.cs" />
+    <Compile Include="Chapter10\BufferWrongPartiallyFixed.cs" />
     <Compile Include="Chapter2\ExampleThread.cs" />
     <Compile Include="Chapter3\CorrectThreadedArraySumV2.cs" />
     <Compile Include="Chapter3\CorrectThreadedArraySumV1.cs" />
