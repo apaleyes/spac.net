@@ -183,7 +183,7 @@ Here, then, is a complete and correct program. There is no change to the `SumRan
         return ans;
     }
 
-### 3.2  Why Not To Use One Thread Per Processor
+### 3.2 Why Not To Use One Thread Per Processor
 
 Having now presented a basic parallel algorithm, we will argue that the approach the algorithm takes is poor style and likely to lead to unnecessary inefficiency. Do not despair: the concepts we have learned like creating threads and using `Join` will remain useful — and it was best to explain them using a too-simple approach. Moreover, many parallel programs are written in pretty much exactly this style, often because libraries like those in Section 3.4 are unavailable. Fortunately, such libraries are now available on many platforms.
 
@@ -191,8 +191,7 @@ The problem with the previous approach was dividing the work into exactly 4 piec
 
 __Different computers have different numbers of processors__
 
-We want parallel programs that effectively use the processors available to them. Using exactly 4 threads is a horrible approach. If 8 processors are available, half of them will sit idle and our program will be no faster than
-with 4 processors. If 3 processors are available, our 4-thread program will take approximately twice as long as with 4 processors. If 3 processors are available and we rewrite our program to use 3 threads, then we will use resources effectively and the result will only be about 33% slower than when we had 4 processors and 4 threads. (We will take 1/3 as much time as the sequential version compared to 1/4 as much time. And 1/3 is 33% slower than 1/4.) But we do not want to have to edit our code every time we run it on a computer with a different number of processors.
+We want parallel programs that effectively use the processors available to them. Using exactly 4 threads is a horrible approach. If 8 processors are available, half of them will sit idle and our program will be no faster than with 4 processors. If 3 processors are available, our 4-thread program will take approximately twice as long as with 4 processors. If 3 processors are available and we rewrite our program to use 3 threads, then we will use resources effectively and the result will only be about 33% slower than when we had 4 processors and 4 threads. (We will take 1/3 as much time as the sequential version compared to 1/4 as much time. And 1/3 is 33% slower than 1/4.) But we do not want to have to edit our code every time we run it on a computer with a different number of processors.
 
 A natural solution is a core software-engineering principle you should already know: do not use constants where a variable is appropriate. Our `Sum` method can take as a parameter the number of threads to use, leaving it to some other part of the program to decide the number. (There are C# library methods to ask for the number of processors on the computer, for example, but we argue next that using that number is often unwise.) It would look like this:
 
@@ -221,3 +220,235 @@ A natural solution is a core software-engineering principle you should already k
     }
 
 Note that you need to be careful with integer division not to introduce rounding errors when dividing the work.
+
+__The processors available to part of the code can change__
+
+The second dubious assumption made so far is that every processor is available to the code we are writing. But some processors may be needed by other programs or even other parts of the same program. We have parallelism after all — maybe the caller to `Sum` is already part of some outer parallel algorithm. The operating system can reassign processors at any time, even when we are in the middle of summing array elements. It is fine to assume that the underlying C# implementation will try to use the available processors effectively, but we should not assume 4 or even `numThreads` processors will be available from the beginning to the end of running our parallel algorithm.
+
+__We cannot always predictably divide the work into approximately equal pieces__
+
+In our `Sum` example, it is quite likely that the threads processing equal-size chunks of the array take approximately the same amount of time.   They may not, due to memory-hierarchy issues or other architectural effects,  however. Moreover, more sophisticated algorithms could produce a large _load imbalance_, meaning different helper threads are given different amounts of work. As a simple example (perhaps too simple for it to actually matter), suppose we have a large `int[]` and we want to know how many elements of the array are prime numbers. If one portion of the array has more large prime numbers than another, then one helper thread may take longer.
+
+In short, giving each helper thread an equal number of data elements is not necessarily the same as giving each helper thread an equal amount of work. And any load imbalance hurts our efficiency since we need to wait until all threads are completed.
+
+__A solution: Divide the work into smaller pieces__
+
+We outlined three problems above. It turns out we can solve all three with a perhaps counterintuitive strategy: _Use substantially more threads than there are processors._ For example, suppose to sum the elements of an array we created one thread for each 1000 elements. Assuming a large enough array (size greater than 1000 times the number of processors), the threads will not all run at once since a processor can run at most one thread at a time. But this is fine: the system will keep track of what threads are waiting and keep all the processors busy. There is some overhead to creating more threads, so we should use a system where this overhead is small.
+
+This approach clearly fixes the first problem: any number of processors will stay busy until the very end when there are fewer 1000-element chunks remaining than there are processors. It also fixes the second problem since we just have a “big pile” of threads waiting to run. If the number of processors available changes, that affects only how fast the pile is processed, but we are always doing useful work with the resources available. Lastly, this approach helps with the load imbalance problem: smaller chunks of work make load imbalance far less likely since the threads do not run as long. Also, if one processor has a slow chunk, other processors can continue processing faster chunks.
+
+We can go back to our cutting-potatoes analogy to understand this approach: rather than give each of 4 cooks (processors) 1/4 of the potatoes, we have them each take a moderate number of potatoes, slice them, and then return to take another moderate number. Since some potatoes may take longer than others (they might be dirtier or have more eyes), this approach is better balanced and is probably worth the cost of the few extra trips to the pile of potatoes — especially if one of the cooks might take a break (processor used for a different program) before finishing his/her pile.
+
+Unfortunately, this approach still has two problems addressed in Sections 3.3 and 3.4:
+
+ 1. We now have more results to combine.  Dividing the array into 4 total pieces leaves _Θ(1)_ results to combine. Dividing  the  array  into  1000-element  chunks  leaves `arr.Length/1000`,  which  is _Θ(n)_, results  to  combine.   Combining the results with a sequential for-loop produces an _Θ(n)_ algorithm, albeit with a smaller constant factor. To see the problem even more clearly, suppose we go to the extreme and use 1-element chunks — now the results combining reimplements the original sequential algorithm. In short, we need a better way to combine results.
+ 2. C#'s threads were not designed for small tasks like adding 1000 numbers.  They will work and produce the correct answer, but the constant-factor overheads of creating a C# thread are far too large. A C# program that creates 100,000 threads on a small desktop computer is unlikely to run well at all — each thread just takes too much memory and the scheduler is overburdened and provides no asymptotic run-time guarantee. In short, we need a different implementation of threads that is designed for this kind of fork/join programming.
+
+
+### 3.3 Divide-And-Conquer Parallelism
+
+This section presents the idea of divide-and-conquer parallelism using C# threads. Then Section 3.4 switches to using a library where this programming style is actually efficient. This progression shows that we can understand all the ideas using the basic notion of threads even though in practice we need a library that is designed for this kind of programming.
+
+The key idea is to _change our algorithm_ for summing the elements of an array to use recursive divide-and-conquer. To sum all the array elements in some range from `lo` to `hi`, do the following:
+
+ 1. If the range contains only one element, return that element as the sum. Else in parallel:
+  1.1. Recursively sum the elements from `lo` to the middle of the range.
+  1.2. Recursively sum the elements from the middle of the range to `hi`.
+ 2. Add the two results from the previous step.
+
+The essence of the recursion is that steps 1a and 1b will themselves use parallelism to divide the work of their halves in half again. It is the same divide-and-conquer recursive idea as you have seen in algorithms like mergesort. For sequential algorithms for simple problems like summing an array, such fanciness is overkill. But for parallel algorithms, it is ideal.
+
+As a small example (too small to actually want to use parallelism), consider summing an array with 10 elements. The algorithm produces the following tree of recursion, where the range `[i,j)` includes `i` and excludes `j`:
+
+    Thread: sum range [0,10)
+        Thread: sum range [0,5)
+            Thread: sum range [0,2)
+                Thread: sum range [0,1) (return arr[0])
+                Thread: sum range [1,2) (return arr[1])
+                add results from two helper threads
+            Thread: sum range [2,5)
+                Thread: sum range [2,3) (return arr[2])
+                Thread: sum range [3,5)
+                    Thread: sum range [3,4) (return arr[3])
+                    Thread: sum range [4,5) (return arr[4])
+                    add results from two helper threads
+                add results from two helper threads
+            add results from two helper threads
+        Thread: sum range [5,10)
+            Thread: sum range [5,7)
+                Thread: sum range [5,6) (return arr[5])
+                Thread: sum range [6,7) (return arr[6])
+                add results from two helper threads
+            Thread: sum range [7,10)
+                Thread: sum range [7,8) (return arr[7])
+                Thread: sum range [8,10)
+                    Thread: sum range [8,9) (return arr[8])
+                    Thread: sum range [9,10) (return arr[9])
+                    add results from two helper threads
+                add results from two helper threads
+            add results from two helper threads
+        add results from two helper threads
+
+The total amount of work done by this algorithm is _O(n)_ because we create approximately _2n_ threads and each thread either returns an array element or adds together results from two helper threads it created. Much more interestingly, if we have _O(n)_ processors, then this algorithm can run in _O(log n)_ time, which is exponentially faster than the sequential algorithm. The key reason for the improvement is that the algorithm is combining results in parallel. The recursion forms a binary tree for summing subranges and the height of this tree is _log n_ for a range of size _n_. See Figure 5, which shows the recursion in a more conventional tree form where the number of nodes is growing exponentially faster than the tree height. With enough processors, the total running time corresponds to the tree _height_, not the tree _size_:  this is the fundamental running-time benefit of parallelism. Later sections will discuss why the problem of summing an array has such an efficient  parallel algorithm; not every problem enjoys exponential improvement from parallelism.
+
+Having described the algorithm in English, seen an example, and informally analyzed its running time, let us now consider an actual implementation with C# threads and then modify it with two important improvements that affect only constant factors, but the constant factors are large. Then the next section will show the “final” version where we use the improvements and use a different library for the threads.
+
+To start, here is the algorithm directly translated into C#, omitting some boilerplate like putting the main `Sum` method in a class and handling exceptions (Note - This may fail to compute the correct result in default .Net settings. By default every thread in 32 bit app gets 1 Mb of memory in .Net. And the whole app gets 2 Gb. So creating about 2000 threads can easily make app run out of memory).
+
+    class SumRange
+    {
+        int left;
+        int right;
+        int[] arr;
+        public int Answer { get; private set; }
+
+        public SumRange(int[] a, int l, int r)
+        {
+            left = l;
+            right = r;
+            arr = a;
+            Answer = 0;
+        }
+
+        public void Run()
+        {
+            if (right - left == 1)
+            {
+                Answer = arr[left];
+            }
+            else
+            {
+                SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+                SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+                Thread leftThread = new Thread(leftRange.Run);
+                Thread rightThread = new Thread(rightRange.Run);
+                leftThread.Start();
+                rightThread.Start();
+                leftThread.Join();
+                rightThread.Join();
+
+                Answer = leftRange.Answer + rightRange.Answer;
+            }
+        }
+    }
+
+    public static int Sum(int[] arr)
+    {
+        SumRange s = new SumRange(arr, 0, arr.Length);
+        s.Run();
+        return s.Answer;
+    }
+
+Notice how each thread creates two helper threads `leftThread` and `rightThread` and then waits for them to finish. Crucially, the calls to `leftThread.Start` and `rightThread.start` precede the calls to `leftThread.Join` and `right.ThreadJoin`. If for example, `leftThread.Join()` came before `rightThread.Start()`, then the algorithm would have no effective  parallelism whatsoever. It would still produce the correct answer, but so would the original much simpler sequential program.
+
+In practice, code like this produces far too many threads to be efficient. To add up four numbers, does it really make sense to create six new threads? Therefore, implementations of fork/join algorithms invariably use a _cutoff_ below which they switch over to a sequential algorithm. Because this cutoff is a constant, it has no effect on the asymptotic behavior of the algorithm. What it does is eliminate the vast majority of the threads created, while still preserving enough parallelism to balance the load among the processors.
+
+Here is code using a cutoff of 1000. As you can see, using a cutoff does not really complicate the code.
+
+    class SumRange
+    {
+        static int Sequential_Cutoff = 100;
+        int left;
+        int right;
+        int[] arr;
+        public int Answer { get; private set; }
+
+        public SumRange(int[] a, int l, int r)
+        {
+            left = l;
+            right = r;
+            arr = a;
+            Answer = 0;
+        }
+
+        public void Run()
+        {
+            if (right - left < Sequential_Cutoff)
+            {
+                for (int i = left; i < right; i++)
+                {
+                    Answer += arr[i];
+                }
+            }
+            else
+            {
+                SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+                SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+                Thread leftThread = new Thread(leftRange.Run);
+                Thread rightThread = new Thread(rightRange.Run);
+                leftThread.Start();
+                rightThread.Start();
+                leftThread.Join();
+                rightThread.Join();
+
+                Answer = leftRange.Answer + rightRange.Answer;
+            }
+        }
+    }
+
+    public static int Sum(int[] arr)
+    {
+        SumRange s = new SumRange(arr, 0, arr.Length);
+        s.Run();
+        return s.Answer;
+    }
+
+Using cut-offs is common in divide-and-conquer programming, even for sequential algorithms. For example, it is typical for quicksort to be slower than an _O(n<sup>2</sup>) sort like insertionsort for small arrays (_n<10_ or so). Therefore, it is common to have the recursive quicksort switch over to insertionsort for small subproblems. In parallel programming, switching over to a sequential algorithm below a cutoff is _the exact same idea_. In practice, the cutoffs are usually larger, with numbers between 500 and 5000 being typical.
+
+It is often worth doing some quick calculations to understand the benefits of things like cutoffs. Suppose we are summing an array with 2<sup>30</sup> elements. Without a cutoff, we would use 2<sup>31</sup> − 1, (i.e., two billion) threads. With a cutoff of 1000, we would use approximately 2<sup>21</sup> (i.e., 2 million) threads since the last 10 levels of the recursion would be eliminated. Computing 1 − 2<sup>21</sup>/2<sup>31</sup>, we see we have eliminated 99.9% of the threads. Use cutoffs!
+
+Our second improvement may  seem anticlimactic compared to cutoffs because it only reduces the number of threads by an additional factor of two. Nonetheless, it is worth seeing for efficiency especially because the Task Parallel in the next section performs poorly if you do not do this optimization “by hand”. The key is to notice that all threads that create two helper threads are not doing much work themselves: they divide the work in half, give it to two helpers, wait for them to finish, and add the results.  Rather than having all these threads wait around, it is more efficient to create _one helper thread_ to do half the work and have the thread do the other half _itself_. Modifying our code to do this is easy since we can just call the `Run` method directly, without passing it into "magic" `Thread` object.
+
+    class SumRange
+    {
+        static int Sequential_Cutoff = 100;
+        int left;
+        int right;
+        int[] arr;
+        public int Answer { get; private set; }
+
+        public SumRange(int[] a, int l, int r)
+        {
+            left = l;
+            right = r;
+            arr = a;
+            Answer = 0;
+        }
+
+        public void Run()
+        {
+            if (right - left < Sequential_Cutoff)
+            {
+                for (int i = left; i < right; i++)
+                {
+                    Answer += arr[i];
+                }
+            }
+            else
+            {
+                SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+                SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+                Thread leftThread = new Thread(leftRange.Run);
+                leftThread.Start();
+                rightRange.Run();
+                leftThread.Join();
+
+                Answer = leftRange.Answer + rightRange.Answer;
+            }
+        }
+    }
+
+    public static int Sum(int[] arr)
+    {
+        SumRange s = new SumRange(arr, 0, arr.Length);
+        s.Run();
+        return s.Answer;
+    }
+
+Notice how the code above creates two `SumRange` objects, but only creates one helper thread. It then does the right half of the work itself by calling `rightRange.Run()`. There is only one call to `Join` because only one helper thread was created. The order here is still essential so that the two halves of the work are done in parallel. Creating a `SumRange` object for the right half and then calling `Run` rather than creating a thread may seem odd, but
+it keeps the code from getting more complicated and still conveys the idea of dividing the work into two similar parts that are done in parallel.
+
+Unfortunately, even with these optimizations, the code above will run poorly in practice, especially if given a large array. The implementation of C# threads is not engineered for threads that do such a small amount of work as adding 1000 numbers: it takes much longer just to create, start running, and dispose of a thread. The space overhead may also be prohibitive. In particular, it is not uncommon for a C# implementation to pre-allocate some amount of memory for the stack, which might be 1MB or more. So creating thousands of threads could use gigabytes of space. Hence we will switch to the library described in the next section for parallel programming. We will return to C# threads when we learn concurrency because the synchronization operations we will use work with C# threads.
