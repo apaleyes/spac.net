@@ -120,14 +120,14 @@ It is common to combine the joining for-loop and the result-combining for-loop. 
     for(int i=0; i < 4; i++)
         t[i].Join();
     for(int i=0; i < 4; i++)
-        ans += t[i].Answer;
+        ans += s[i].Answer;
     return ans;
 
 There is nothing wrong with the code above, but the following is also correct:
 
     for(int i=0; i < 4; i++) {
         t[i].Join();
-        ans += t[i].Answer;
+        ans += s[i].Answer;
     }
     return ans;
 
@@ -177,12 +177,47 @@ Here, then, is a complete and correct program. There is no change to the `SumRan
         for (int i = 0; i < 4; i++)
         {
             t[i].Join();
-        }
-
-        for (int i = 0; i < 4; i++)
-        {
             ans += s[i].Answer;
         }
 
         return ans;
     }
+
+### 3.2  Why Not To Use One Thread Per Processor
+
+Having now presented a basic parallel algorithm, we will argue that the approach the algorithm takes is poor style and likely to lead to unnecessary inefficiency. Do not despair: the concepts we have learned like creating threads and using `Join` will remain useful — and it was best to explain them using a too-simple approach. Moreover, many parallel programs are written in pretty much exactly this style, often because libraries like those in Section 3.4 are unavailable. Fortunately, such libraries are now available on many platforms.
+
+The problem with the previous approach was dividing the work into exactly 4 pieces. This approach assumes there are 4 processors available to do the work (no other code needs them) and that each processor is given approximately the same amount of work. Sometimes these assumptions may hold, but it would be better to use algorithms that do not rely on such brittle assumptions. The rest of this section explains in more detail why these assumptions are unlikely to hold and some partial solutions. Section 3.3 then describes the better solution that we advocate.
+
+__Different computers have different numbers of processors__
+
+We want parallel programs that effectively use the processors available to them. Using exactly 4 threads is a horrible approach. If 8 processors are available, half of them will sit idle and our program will be no faster than
+with 4 processors. If 3 processors are available, our 4-thread program will take approximately twice as long as with 4 processors. If 3 processors are available and we rewrite our program to use 3 threads, then we will use resources effectively and the result will only be about 33% slower than when we had 4 processors and 4 threads. (We will take 1/3 as much time as the sequential version compared to 1/4 as much time. And 1/3 is 33% slower than 1/4.) But we do not want to have to edit our code every time we run it on a computer with a different number of processors.
+
+A natural solution is a core software-engineering principle you should already know: do not use constants where a variable is appropriate. Our `Sum` method can take as a parameter the number of threads to use, leaving it to some other part of the program to decide the number. (There are C# library methods to ask for the number of processors on the computer, for example, but we argue next that using that number is often unwise.) It would look like this:
+
+    public static int Sum(int[] arr, int numThreads)
+    {
+        int len = arr.Length;
+        int ans = 0;
+
+        SumRange[] s = new SumRange[numThreads];
+        Thread[] t = new Thread[numThreads];
+        for (int i = 0; i < numThreads; i++)
+        {
+            SumRange sr = new SumRange(arr, (i * len) / numThreads, ((i + 1) * len) / numThreads);
+            s[i] = sr;
+            t[i] = new Thread(sr.Run);
+            t[i].Start();
+        }
+
+        for (int i = 0; i < numThreads; i++)
+        {
+            t[i].Join();
+            ans += s[i].Answer;
+        }
+
+        return ans;
+    }
+
+Note that you need to be careful with integer division not to introduce rounding errors when dividing the work.
