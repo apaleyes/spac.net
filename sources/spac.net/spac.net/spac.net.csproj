@@ -57,6 +57,7 @@
     <Compile Include="Chapter3\DivideAndConquerTaskParallelResult.cs" />
     <Compile Include="Chapter3\SequentialArraySum.cs" />
     <Compile Include="Chapter3\SimpleDivideAndConquerArraySum.cs" />
+    <Compile Include="Chapter3\VariableNumberOfThreadsArraySum.cs" />
     <Compile Include="Chapter3\WrongThreadedArraySum.cs" />
     <Compile Include="Chapter5\SequentialPack.cs" />
     <Compile Include="Chapter5\SequentialPrefixSum.cs" />
