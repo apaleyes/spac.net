@@ -18,7 +18,7 @@ namespace spac.net.Chapter3
                 arr = a;
             }
 
-            public int Compute()
+            public int Run()
             {
                 if (right - left < Sequential_Cutoff)
                 {
@@ -34,8 +34,8 @@ namespace spac.net.Chapter3
                     SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
                     SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
 
-                    Task<int> leftTask = Task.Factory.StartNew<int>(leftRange.Compute);
-                    int rightAns = rightRange.Compute();
+                    Task<int> leftTask = Task.Factory.StartNew<int>(leftRange.Run);
+                    int rightAns = rightRange.Run();
                     leftTask.Wait();
                     int leftAns = leftTask.Result;
 
@@ -47,7 +47,7 @@ namespace spac.net.Chapter3
         public static int Sum(int[] arr)
         {
             SumRange s = new SumRange(arr, 0, arr.Length);
-            return s.Compute();
+            return s.Run();
         }
     }
 }
