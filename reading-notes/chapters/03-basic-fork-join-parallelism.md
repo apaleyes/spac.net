@@ -4,7 +4,7 @@ This section shows how to use threads and shared memory to implement simple para
 
 ### 3.1 A Simple Example: Okay Idea, Inferior Style
 
-Most of this section will consider the problem of computing the sum of an array of integers. An _O(n)__ sequential solution to this problem is trivial:
+Most of this section will consider the problem of computing the sum of an array of integers. An _O(n)_ sequential solution to this problem is trivial:
 
     int Sum(int[] arr)
     {
@@ -648,3 +648,15 @@ Parallel reductions are not the only common pattern in parallel programming. An 
 Coding up this algorithm in the Task Parallel Library is straightforward:  Have the main thread create the `ans` array and pass it before starting the parallel divide-and-conquer. Each thread object will have a reference to this array but will assign to different portions of it. Because there are no other results to combine, using `Task` is appropriate. Using a sequential cut-off and creating only one new thread for each recursive subdivision of the problem remain important — these ideas are more general than the particular programming pattern of a map or a reduce.
 
 Recognizing problems that are fundamentally maps and/or reduces over large data collections is a valuable skill that allows efficient parallelization. In fact, it is one of the key ideas behind Google’s MapReduce framework and the open-source variant Hadoop. In these systems, the programmer just writes the operations that describe how to map data (e.g., “multiply by 2”) and reduce data (e.g., “take the minimum”). The system then does all the parallelization, often using hundreds or thousands of computers to process gigabytes or terabytes of data. For this to work, the programmer must provide operations that have no side effects (since the order they occur is unspecified) and reduce operations that are associative (as we discussed). As parallel programmers, it is often enough to “write down the maps and reduces” — leaving it to systems like the TPL or Hadoop to do the actual scheduling of the parallelism.
+
+### 3.6 Data Structures Besides Arrays
+
+So far we have considered only algorithms over one-dimensional arrays.  Naturally, one can write parallel algorithms over any data structure, but divide-and-conquer parallelism requires that we can efficiently (ideally in _O(1)_ time) divide the problem into smaller pieces. For arrays, dividing the problem involves only _O(1)_ arithmetic on indices, so this works well.
+
+While arrays are the most common data structure in parallel programming, balanced trees, such as AVL trees or B trees, also support parallel algorithms well. For example, with a binary tree, we can fork to process the left child and right child of each node in parallel. For good sequential cut-offs, it helps to have stored at each tree node the number of descendants of the node, something easy to maintain. However, for trees with guaranteed balance properties, other information — like the height of an AVL tree node — should suffice.
+
+Certain tree problems will not run faster with parallelism. For example, searching for an element in a balanced binary search tree takes _O(log n)_ time with or without parallelism. However, maps and reduces over balanced treesbenefit from parallelism. For example, summing the elements of a binary tree takes _O(n)_ time sequentially where _n_ is the number of elements, but with a sufficiently large number of processors, the time is _O(h)_, where _h_ is the height of the tree. Hence, tree balance is even more important with parallel programming: for a balanced tree h = _Θ(log n)_ compared to the worst case _h = Θ(n)_.
+
+For the same reason, parallel algorithms over regular linked lists are typically poor. Any problem that requires reading all _n_ elements of a linked list takes time _Ω(n)_ regardless of how many processors are available. (Fancier list data structures like skip lists are better for exactly this reason — you can get to all the data in _O(log n)_time.) Streams of input data, such as from files, typically have the same limitation: it takes linear time to read the input and this can be the bottleneck for the algorithm.
+
+There can still be benefit to parallelism with such “inherently sequential” data structures and input streams. Suppose we had a map operation over a list but each operation was itself an expensive computation (e.g., decrypting a significant piece of data). If each map operation took time _O(x)_ and the list had length _n_, doing each operation in a separate thread (assuming,  again, no limit on the number of processors) would produce an _O(x + n)_ algorithm compared to the sequential _O(xn)_ algorithm. But for simple operations like summing or finding a maximum element, there would be no benefit.
