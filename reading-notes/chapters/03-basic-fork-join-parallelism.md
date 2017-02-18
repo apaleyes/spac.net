@@ -588,5 +588,63 @@ Here are the differences from the version that uses non-generic `Task`:
 
 If you are familiar with C# generic types, this use of them should not be particularly perplexing. The library is also using static overloading for the `StartNew` method. But as _users_ of the library, it suffices just to know that you can follow the same pattern no matter which type of task you are using.
 
+### 3.5 Reductions and Maps
 
+It may seem that given all the work we did to implement something as conceptually simple as summing an array that fork/join programming is too complicated. To the contrary, it turns out that many, many problems can be solved very much like we solved this one. Just like regular for-loops took some getting used to when you started programming but now you can recognize exactly what kind of loop you need for all sorts of problems, divide-and-conquer parallelism often follows a small number of patterns. Once you know the patterns, most of your programs are largely the same.
 
+For example, here are several problems for which efficient parallel algorithms look almost identical to summing an array:
+
+ * Count how many array elements satisfy some property (e.g., how many elements are the number 42).
+ * Find the maximum or minimum element of an array.
+ * Given an array of strings, compute the sum (or max, or min) of all their lengths.
+ * Find the left-most array index that has an element satisfying some property.
+
+Compared to summing an array, all that changes is the base case for the recursion and how we combine results. For example, to find the index of the leftmost 42 in an array of length _n_, we can do the following (where a final result of _n_ means the array does not hold a 42):
+
+ * For the base case, return `lo` if `arr[lo]` holds 42 and `n` otherwise.
+ * To combine results, return the smaller number.
+
+Implement one or two of these problems to convince yourself they are not any harder than what we have already done. Or come up with additional problems that can be solved the same way.
+
+Problems that have this form are so common that there is a name for them: _reductions_, which you can remember by realizing that we take a collection of data items (in an array) and _reduce_ the information down to a single result. As we have seen, the way reductions can work in parallel is to compute answers for the two halves recursively and in parallel and then merge these to produce a result.
+
+However, we should be clear that _not every problem over an array of data can be solved with a simple parallel reduction_. To avoid getting into arcane problems, let’s just describe a general situation. Suppose you have sequential code like this:
+
+    interface BinaryOperation<T>
+    {
+        T M(T x, T y);
+    }
+
+    class C<T>
+    {
+        T Fold(T[] arr, BinaryOperation<T> binop, T initialValue)
+        {
+            T ans = initialValue;
+            for (int i = 0; i < arr.Length; i++)
+                ans = binop.M(ans, arr[i]);
+            return ans;
+        }
+    }
+
+The name `Fold` is conventional for this sort of algorithm. The idea is to start with `initialValue` and keep updating the “answer so far” by applying some binary function `M` to the current answer and the next element of the array.
+
+Without any additional information about what `M` computes, this algorithm cannot be effectively parallelized since we cannot process `arr[i]` until we know the answer from the first `i-1` iterations of the for-loop. For a more humorous example of a procedure that cannot be sped up given additional resources: 9 women can’t make a baby in 1 month.
+
+So what do we have to know about the `BinaryOperation` above in order to use a parallel reduction? It turns out all we need is that the operation is _associative_ _, meaning for all _a_, _b_, and _c_, _M(a, M(b, c))_ is the same as _M(M(a, b), c)_. Our array-summing algorithm is correct because _a + (b + c) = (a + b) + c_.  Our find-the-leftmost-index-holding 42 algorithm is correct because _min_ is also an associative operator.
+
+Because reductions using associative operators are so common, we could write one generic algorithm that took the operator, and what to do for a base case, as arguments. This is an example of higher-order programming, and the Task Parallel Library has several classes providing this sort of functionality. Higher-order programming has many, many advantages (see the end of this section for a popular one), but when first _learning_ a programming pattern, it is often useful to “code it up yourself” a few times. For that reason, we encourage writing your parallel reductions manually in order to see the parallel divide-and-conquer, even though they all really look the same.
+
+Parallel reductions are not the only common pattern in parallel programming. An even simpler one, which we did not start with because it is just so easy, is a parallel _map_. A map performs an operation on each input element independently; given an array of inputs, it produces an array of outputs of the same length. A simple example would be multiplying every element of an array by 2. An example using two inputs and producing a separate output would be vector addition. Using pseudocode, we could write:
+
+    int[] add(int[] arr1, int[] arr2)
+    {
+        assert(arr1.length == arr2.length);
+        int[] ans = new int[arr1.length];
+        FORALL(int i = 0; i < arr1.length; i++)
+            ans[i] = arr1[i] + arr2[i];
+        return ans;
+    }
+
+Coding up this algorithm in the Task Parallel Library is straightforward:  Have the main thread create the `ans` array and pass it before starting the parallel divide-and-conquer. Each thread object will have a reference to this array but will assign to different portions of it. Because there are no other results to combine, using `Task` is appropriate. Using a sequential cut-off and creating only one new thread for each recursive subdivision of the problem remain important — these ideas are more general than the particular programming pattern of a map or a reduce.
+
+Recognizing problems that are fundamentally maps and/or reduces over large data collections is a valuable skill that allows efficient parallelization. In fact, it is one of the key ideas behind Google’s MapReduce framework and the open-source variant Hadoop. In these systems, the programmer just writes the operations that describe how to map data (e.g., “multiply by 2”) and reduce data (e.g., “take the minimum”). The system then does all the parallelization, often using hundreds or thousands of computers to process gigabytes or terabytes of data. For this to work, the programmer must provide operations that have no side effects (since the order they occur is unspecified) and reduce operations that are associative (as we discussed). As parallel programmers, it is often enough to “write down the maps and reduces” — leaving it to systems like the TPL or Hadoop to do the actual scheduling of the parallelism.
