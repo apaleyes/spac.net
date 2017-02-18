@@ -452,3 +452,141 @@ Notice how the code above creates two `SumRange` objects, but only creates one h
 it keeps the code from getting more complicated and still conveys the idea of dividing the work into two similar parts that are done in parallel.
 
 Unfortunately, even with these optimizations, the code above will run poorly in practice, especially if given a large array. The implementation of C# threads is not engineered for threads that do such a small amount of work as adding 1000 numbers: it takes much longer just to create, start running, and dispose of a thread. The space overhead may also be prohibitive. In particular, it is not uncommon for a C# implementation to pre-allocate some amount of memory for the stack, which might be 1MB or more. So creating thousands of threads could use gigabytes of space. Hence we will switch to the library described in the next section for parallel programming. We will return to C# threads when we learn concurrency because the synchronization operations we will use work with C# threads.
+
+### 3.4 The C# Task Parallel Library
+
+.Net 4 (and higher) includes classes in `System.Threading` and `System.Threading.Tasks` namespaces designed exactly for the kind of fine-grained fork-join parallel computing these notes use. Collection of these classes is called Task Parallel Library or TPL. In addition to supporting lightweight threads (which the library calls Tasks) that are small enough that even a million of them should not overwhelm the system, the implementation includes a scheduler and run-time system with provably optimal expected-time guarantees. Similar libraries for other languages include Intel’s Thread Building Blocks, Java ForkJoin Framework, and others. The core ideas and implementation techniques go back much further to the Cilk language, an extension of C developed since 1994.
+
+This section describes just a few practical details and library specifics. Compared to C# threads, the core ideas are all the same, but some of the method names and interfaces are different — in places more complicated and in others simpler. Naturally, we give a full example (actually two) for summing an array of numbers. The actual library contains many other useful features and classes, but we will use only the primitives related to forking and joining, implementing anything else we need ourselves.
+
+We first show a full program that is as much as possible like the version we wrote using C# threads. We show a version using a sequential cut-off and only one helper thread at each recursive subdivision though removing these important improvements would be easy. After discussing this version, we show  a second version that uses C# generic types and a different library class. This second version is better style, but easier to understand after the first version.
+
+FIRST VERSION (INFERIOR STYLE):
+
+    using System.Threading.Tasks;
+
+    public class  public class DivideAndConquerTaskParallel
+    {
+        class SumRange
+        {
+            static int Sequential_Cutoff = 100;
+            int left;
+            int right;
+            int[] arr;
+            public int Answer { get; private set; }
+
+            public SumRange(int[] a, int l, int r)
+            {
+                left = l;
+                right = r;
+                arr = a;
+                Answer = 0;
+            }
+
+            public void Run()
+            {
+                if (right - left < Sequential_Cutoff)
+                {
+                    for (int i = left; i < right; i++)
+                    {
+                        Answer += arr[i];
+                    }
+                }
+                else
+                {
+                    SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+                    SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+                    Task leftTask = Task.Factory.StartNew(leftRange.Run);
+                    rightRange.Run();
+                    leftTask.Wait();
+
+                    Answer = leftRange.Answer + rightRange.Answer;
+                }
+            }
+        }
+
+        public static int Sum(int[] arr)
+        {
+            SumRange s = new SumRange(arr, 0, arr.Length);
+            s.Run();
+            return s.Answer;
+        }
+    }
+
+There are some differences compared to using C# threads, but the overall structure of the algorithm should look similar. Furthermore, most of the changes are just different names for classes and methods:
+
+ * Class `System.Threading.Tasks.Task` instead of `System.Threading.Thread`.
+ * Parallelism starts with static method call `Task.Factory.StartNew`.
+ * Method for waiting another task's finish is now called `Wait` instead of `Join`.
+
+Such details as starting a new task with `System.Threading.Thread` are there because the library is not built into the C# _language_, so we have to do a little extra to use it. What you really need to know is that `Task` instances should not be created explicitly, but rather by the tasks factory, so that the library could deal with underlying details such as the partitioning of the work, the scheduling of threads on the `ThreadPool`, cancellation support, state management, and other low-level details. Otherwise `Task` is very similar to `Thread`, with `Start` and `Wait` being used just as we used `Start` and `Join` before.
+
+We will present one final version of our array-summing program to demonstrate one more aspect of TPL that you should use as a matter of style. The `Task` class is best only when the subcomputations do not produce a result, whereas in our example they do: the sum of the range. It is quite common not to produce a result, for example a parallel program that increments every element of an array. So far, the way we have “returned” results is via a property, which we called `Answer`.
+
+Instead, we can use generic class `Task<T>` instead of `Task`. The type parameter here is the type of value that passed delegate should return. Here is the full version of the code using this more convenient and less error-prone class, followed by an explanation:
+
+FINAL, BETTER VERSION:
+
+    using System.Threading.Tasks;
+
+    public class DivideAndConquerTaskParallelResult
+    {
+        class SumRange
+        {
+            static int Sequential_Cutoff = 100;
+            int left;
+            int right;
+            int[] arr;
+
+            public SumRange(int[] a, int l, int r)
+            {
+                left = l;
+                right = r;
+                arr = a;
+            }
+
+            public int Run()
+            {
+                if (right - left < Sequential_Cutoff)
+                {
+                    int ans = 0;
+                    for (int i = left; i < right; i++)
+                    {
+                        ans += i;
+                    }
+                    return ans;
+                }
+                else
+                {
+                    SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+                    SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+                    Task<int> leftTask = Task.Factory.StartNew<int>(leftRange.Run);
+                    int rightAns = rightRange.Run();
+                    leftTask.Wait();
+                    int leftAns = leftTask.Result;
+
+                    return leftAns + rightAns;
+                }
+            }
+        }
+
+        public static int Sum(int[] arr)
+        {
+            SumRange s = new SumRange(arr, 0, arr.Length);
+            return s.Run();
+        }
+    }
+
+Here are the differences from the version that uses non-generic `Task`:
+
+ * `Answer` property is gone.
+ * `Run` returns an integer as a result of computation.
+ * We use `Task<int>` instead of `Task`.
+ * Tasks now have an additional property `Result` which we use to get result of a task run.
+
+If you are familiar with C# generic types, this use of them should not be particularly perplexing. The library is also using static overloading for the `StartNew` method. But as _users_ of the library, it suffices just to know that you can follow the same pattern no matter which type of task you are using.
+
+
+
