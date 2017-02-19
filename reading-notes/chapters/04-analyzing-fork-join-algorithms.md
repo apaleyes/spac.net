@@ -63,3 +63,45 @@ Thinking in terms of the program-execution dag, it is rather amazing that a libr
 However, as mentioned above, the bound holds only under a couple assumptions.  The first is that all the threads you create to do subproblems do approximately the same amount of work. Otherwise, if a thread with much-more-work-to-do is scheduled very late, other processors will sit idle waiting for this laggard to finish. The second is that all the threads do a small but not tiny amount of work. In other words, just avoid threads that do millions of operations as well as threads that do dozens.
 
 To summarize, as a user of a library like this, your job is to pick a good parallel algorithm, implement it in terms of divide-and-conquer with a reasonable sequential cut-off, and analyze the expected run-time in terms of the provided bound. The library’s job is to give this bound while trying to maintain low constant-factor overheads. While this library is particularly good for _this_ style of programming, this basic division is common: application writers develop good algorithms and rely on some underlying thread scheduler to deliver reasonable performance.
+
+### 4.2 Amdahl’s Law
+
+So far we have analyzed the running time of a parallel algorithm. While a parallel algorithm could have some “sequential parts” (a part of the dag where there is a long linear sequence of nodes), it is common to think of an execution in terms of some entirely parallel parts (e.g., maps and reductions) and some entirely sequential parts. The sequential parts could simply be algorithms that have not been parallelized or they could be inherently sequential, like reading in input. As this section shows, even a little bit of sequential work in your program drastically reduces the speed-up once you have a significant number of processors.
+
+This result is really a matter of very basic algebra. It is named after Gene Amdahl, who first articulated it. Though almost all computer scientists learn it and understand it, it is all too common to forget its implications. It is, perhaps, counterintuitive that just a little non-parallelism has such a drastic limit on speed-up. But it’s a fact, so learn and remember Amdahl’s Law!
+
+With that introduction, here is the full derivation of Amdahl’s Law: suppose the work _T<sub>1</sub>_ is 1, i.e., the total program execution time on one processor is 1 “unit time”. Let _S_ be the portion of the execution that cannot be parallelized and assume the rest of the execution (1 − _S_) gets perfect linear speed-up on _P_ processors for any _P_. Notice this is a charitable assumption about the parallel part equivalent to assuming the span is _O(1)_. Then:
+
+<center>_T<sub>1</sub> = S + (1 - S) = 1_</center>
+<center>_T<sub>P</sub> = S + (1 - S) / P_</center>
+
+Notice all we have assumed is that the parallel portion (1 − _S_) runs in time (1 − _S_) / _P_. Then the speed-up, by definition is:
+
+<center>Amdahl’s Law: _T<sub>1</sub> / T<sub>P</sub> = 1 / (S + (1 - S) / P)_</center>
+
+As a corollary, the parallelism is just the simplified equation as _P_ goes to _∞_:
+
+<center>_T<sub>1</sub> / T<sub>P</sub> = 1 / S</center>
+
+The equations may look innocuous until you start plugging in values. For  example, if 33% of a program is sequential, then a billion processors can achieve a speed-up of at most 3. That is just common sense: they cannot speed-up 1/3 of the program, so even if the rest of the program runs “instantly” the speed-up is only 3.
+
+The “problem” is when we expect to get twice the performance from twice the computational resources. If those extra resources are processors, this works only if most of the execution time is still running parallelizable code. Adding a second or third processor can often provide significant speed-up, but as the number of processors grows, the benefit quickly diminishes.
+
+Recall that from 1980–2005 the processing speed of desktop computers doubled approximately every 18 months. Therefore, 12 years or so was long enough to buy a new computer and have it run an old program 100 times faster. Now suppose that instead in 12 years we have 256 processors rather than 1 but all the processors have the same speed. What percentage of a program would have to be perfectly parallelizable in order to get a speed-up of 100? Perhaps a speed-up of 100 given 256 cores seems easy? Plugging into Amdahl’s Law, we need:
+
+<center>100 ≤ 1 / (S + (1 − S) / 256)</center>
+
+Solving for _S_ reveals that at most 0.61% of the program can be sequential.
+
+Given depressing results like these — and there are many, hopefully you will draw some possible-speedup plots as homework exercises — it is tempting to give up on parallelism as a means to performance improvement. While you should never forget Amdahl’s Law, you should also not entirely despair. Parallelism does provide real speed-up for performance-critical parts of programs. You just do not get to speed-up _all_ of your code by buying a faster computer. More specifically, there are two common workarounds to the fact-of-life that is Amdahl’s Law:
+
+ 1. We can find new parallel algorithms. Given enough processors, it is worth parallelizing something (reducing span) even if it means more total computation (increasing work). Amdahl’s Law says that as the number of processors grows, span is more important than work. This is often described as “scalability matters more than performance” where scalability means can-use-more-processors and performance means run-time on a small-number-of-processors. In short, large amounts of parallelism can change your algorithmic choices.
+ 2. We can use the parallelism to solve new or bigger problems rather than solving the same problem faster. For example, suppose the parallel part of a program is _O(n<sup>2</sup>)_ and the sequential part is _O(n)_. As we increase the number of processors, we can increase _n_ with only a small increase in the running time. One area where parallelism is very successful is computer graphics (animated movies, video games, etc.). Compared to years ago, it is not so much that computers are rendering the same scenes faster; it is that they are rendering more impressive scenes with more pixels and more accurate images. In short, parallelism can enable new things (provided those things are parallelizable of course) even if the old things are limited by Amdahl’s Law.
+
+### 4.3 Comparing Amdahl’s Law and Moore’s Law
+
+There is another “Law” relevant to computing speed and the number of processors available on a chip. Moore’s Law, again named after its inventor, Gordon Moore, states that the number of transistors per unit area on a chip doubles roughly every 18 months. That increased transistor density used to lead to faster processors; now it is leading to more processors.
+
+Moore’s Law is an observation about the semiconductor industry that has held for decades. The fact that it has held for so long is entirely about empirical evidence — people look at the chips that are sold and see that they obey this law. Actually, for many years it has been a self-fulfilling prophecy: chip manufacturers expect themselves to continue Moore’s Law and they find a way to achieve technological innovation at this pace. There is no inherent mathematical theorem underlying it. Yet we expect the number of processors to increase exponentially for the foreseeable future.
+
+On the other hand, Amdahl’s Law is an irrefutable fact of algebra.
