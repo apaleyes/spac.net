@@ -8,23 +8,13 @@
 \title{A Sophomoric\footnote{As in intended for second-year students,
     not as in immaturely pretentious}\ \ \ \ Introduction to\\ Shared-Memory
     Parallelism and Concurrency}
-\author{Dan Grossman}
+\author{Dan Grossman\\
+Adapted to C\# by Andrei Paleyes}
 \date{Version of \today}
 
 \begin{document}
 
 \maketitle
-
-\vspace{3in}
-
-\noindent A version of this material has been published as two chapters in the
-book \emph{Parallel and Distributed Computing} edited by Charles
-C. Weems Jr., Arnold Rosenberg, Sushil Prasad, Anshul Gupta, and Alan
-Sussman.  As a result, the copyright and all other rights have been
-transferred to Elsevier. \emph{However,} the author has been explicitly
-given permission to provide this draft of the materials on this
-website so that they can continue to be useful in this format for
-instructors, students, and others.
 
 \newpage
 
@@ -246,7 +236,7 @@ Labs University Collaborations.
 
 In \emph{sequential programming}, one thing happens at a time.
 Sequential programming is what most people learn first and how most
-programs are written.  Probably every program you have written in Java
+programs are written.  Probably every program you have written in C\#
 (or a similar language) is sequential: Execution starts at the
 beginning of \texttt{main} and proceeds one assignment / call / return
 / arithmetic operation at a time.
@@ -391,11 +381,13 @@ are probably accessing different parts of the table.
 In terms of cooking, the shared resources could be something like an
 oven.  It is important not to put a casserole in the oven unless the
 oven is empty.  If the oven is not empty, we could keep checking until
-it is empty.  In Java, you might naively write:
+it is empty.  In C\#, you might naively write:
 \begin{verbatim}
-    while(true) {
-       if(ovenIsEmpty()) {
-          putCasseroleInOven();
+    while (true)
+    {
+       if (OvenIsEmpty())
+       {
+          PutCasseroleInOven();
           break;
        }
     }
@@ -449,9 +441,9 @@ avoid them.
 Before writing any parallel or concurrent programs, we need some way to
 \emph{make multiple things happen at once} and some way for those
 different things to \emph{communicate}.  Put another way, your computer
-may have multiple cores, but all the Java constructs you know are for
+may have multiple cores, but all the C\# constructs you know are for
 sequential programs, which do only one thing at once.  Before showing
-any Java specifics, we need to explain the \emph{programming model}.
+any C\# specifics, we need to explain the \emph{programming model}.
 
 The model we will assume is \emph{explicit threads} with \emph{shared
   memory}.  A \emph{thread} is itself like a running sequential
@@ -467,12 +459,12 @@ Conceptually, all the threads that have been started but not yet
 terminated are ``running at once'' in a program.  In practice, they
 may not all be running at any particular moment:
 \begin{itemize}
-\item There may be more threads than processors.  It is up to the Java
+\item There may be more threads than processors.  It is up to the C\#
   implementation, with help from the underlying operating system, to
   find a way to let the threads ``take turns'' using the available
   processors.  This is called \emph{scheduling} and is a major topic
   in operating systems.  All we need to know is that it is not under
-  the Java programmer's control: you create the threads and the system
+  the C\# programmer's control: you create the threads and the system
   schedules them.
 \item A thread may be waiting for something to happen before it
   continues.  For example, the next section discusses the {\tt join}
@@ -559,56 +551,55 @@ answers back to the ``main'' thread.  The way we will do it is to
 have the helper threads write to some object fields that the main
 thread later reads.
 
-We finish this section with some Java specifics for exactly how to
-create a new thread in Java.  The details vary in different languages
+We finish this section with some C\# specifics for exactly how to
+create a new thread in C\#.  The details vary in different languages
 and in fact the parallelism portion of these notes mostly uses a
-different Java library with slightly different specifics.  In addition
+different C\# library with slightly different specifics.  In addition
 to creating threads, we will need other language constructs for
 coordinating them.  For example, for one thread to read the result
 another thread wrote as its answer, the reader often needs to know the
 writer is done.  We will present such primitives as we need them.
 
-To create a new thread in Java requires that you define a new class
+To create a new thread in C\# requires that you define a new method
 (step 1) and then perform two actions at run-time (steps 2--3):
 \begin{enumerate}
-\item Define a subclass of {\tt java.lang.Thread} and override the
-  {\tt public} method {\tt run}, which takes no arguments and has
-  return type {\tt void}.  The {\tt run} method will act like ``main''
-  for threads created using this class.  It must take no arguments,
-  but the example below shows how to work around this inconvenience.
-\item Create an instance of the class you defined in step 1.  That is,
-  if you defined class {\tt ExampleThread}, then use {\tt new} to create an {\tt ExampleThread}
-  object.  Note this does \emph{not} yet create a running thread.  It
-  just creates an object of class {\tt ExampleThread}, which is a subclass of {\tt
-  Thread}.
-\item Call the {\tt start} method of the object you created in step
-  2.  This step does the ``magic'' creation of a new thread.  That new
-  thread will execute the {\tt run} method of the object.  Notice that
-  you do \emph{not} call {\tt run}; that would just be an ordinary method
-  call.  You call {\tt start}, which makes a new thread that runs {\tt
-    run}.  The call to {\tt start} ``returns immediately'' so the
-  caller continues on, in parallel with the newly-created thread
-  running {\tt run}.  The new thread terminates when its {\tt run}
-  method completes.
+\item Define a method that takes does the intended work and returns
+  {\tt void}. It must take no arguments, but the example below shows
+  how to work around this inconvenience. Let's call this method {\tt Run}.
+\item Create an instance of the class {\tt System.Threading.Thread} and
+  pass a defined method {\tt Run} as an argument. Notice that your method
+  is an implementation of a delegate {\tt System.Threading.ThreadStart}
+  which {\tt Thread} constructor expects. Also note that this does not
+  yet create a running thread. It just creates an object of class {\tt Thread}. 
+\item Call the {\tt Start} method of the object you created in step 2. This
+  step does the “magic” creation of a new thread. That new thread will
+  execute the method that you defined in step 1. Notice that you do not
+  call the method {\tt Run} itself; that would just be an ordinary method
+  call. You call {\tt Start}, which makes a new thread that runs it.
+  The call to {\tt Start} “returns immediately” so the caller continues
+  on, in parallel with the newly-created thread running your method.
+  The new thread terminates when its execution completes.
 \end{enumerate}
-Here is a complete example of a useless Java program that starts with one
+Here is a complete example of a useless C\# program that starts with one
 thread and then creates 20 more threads:
 \begin{verbatim}
-class ExampleThread extends java.lang.Thread {
-   int i;
-   ExampleThread(int i) { this.i = i; }
-   public void run() {
-      System.out.println("Thread " + i + " says hi");
-      System.out.println("Thread " + i + " says bye");
-   }
-}
-class M {
-   public static void main(String[] args) {
-     for(int i=1; i <= 20; ++i) {
-       ExampleThread t = new ExampleThread(i);
-       t.start();
-     }
-   }
+class ExampleThread
+{
+    static void Run(int i)
+    {
+        Console.WriteLine("Thread {0} says hi", i);
+        Console.WriteLine("Thread {0} says bye", i);
+    }
+
+    static void Main(string[] args)
+    {
+        for (int i = 1; i <= 20; i++)
+        {
+            int j = i;
+            Thread t = new Thread(() => Run(j));
+            t.Start();
+        }
+    }
 }
 \end{verbatim}
 When this program runs, it will print 40 lines of output, one of which
@@ -624,7 +615,7 @@ time'' (conceptually, since your machine may not have 21 processors
 available for the program) can run in an unpredictable order.  The
 main thread is the first thread and then it creates 20 others.  The
 main thread always creates the other threads in the same
-order, but it is up to the Java implementation to let all the
+order, but it is up to the C\# implementation to let all the
 threads ``take turns'' using the available processors.  There is no
 guarantee that threads created earlier run earlier.  Therefore,
 multithreaded programs are often \emph{nondeterministic}, meaning
@@ -653,46 +644,16 @@ something like:
 \begin{verbatim}
      Thread 13 Thread says 14 says hi hi
 \end{verbatim}
-This is really a question of how the {\tt System.out.println} method
+This is really a question of how the {\tt Console.WriteLine} method
 handles concurrency and the answer happens to be that it will always
 keep a line of output together, so this would not occur.  In general,
 concurrency introduces new questions about how code should and does
 behave.
 
-We can also see how the example worked around the rule that {\tt run}
-must override {\tt java.lang.Thread}'s {\tt run} method and
-therefore not take any arguments.  The standard idiom is to pass any
-``arguments'' for the new thread to the \emph{constructor}, which then
-stores them in fields so that {\tt run} can later access them.  In
-this simple example, this trick is the only use of shared memory since
-the helper threads (the ones doing the printing) do not need to
-pass any other data to/from the main thread or each other.
-
-It may not look like this is using shared memory, but it is: When the
-main thread calls {\tt new ExampleThread(i)}, this is a normal call to a
-constructor.  A new object gets created and the main thread runs the
-constructor code, writing to the {\tt i} field of the new object.
-Later, after the ``magic'' call to {\tt start}, the new running thread
-is running the {\tt run} method with {\tt this} bound to the same
-object that the main thread wrote to.  The helper thread then reads
-{\tt i}, which just means {\tt this.i}, and gets the value previously
-written by the main thread: shared-memory communication.  See
-Figure~\ref{fig:aliasing_shared_memory}.
-
-\begin{figure}
-\begin{center}
-\includegraphics[scale=.6]{images/aliasing_shared_memory.png}
-\end{center}
-\caption{How we can use shared memory, specifically fields in a subclass
-  of {\tt Thread}, to pass data to a newly created thread.}
-\label{fig:aliasing_shared_memory}
-\end{figure}
-
-As this example shows, shared-memory communication relies on
-aliasing.  The {\tt t} on some iteration of the for-loop refers to the
-same object as {\tt this} in one of the new threads' {\tt run}
-method.  Aliasing is often difficult to reason about, but it is the
-way we communicate in shared-memory multithreaded programs.
+We can also see how the example worked around the rule that {\tt Run}
+cannot take any arguments. The standard idiom is to wrap a call to
+{\tt Run} into a call of a different method that takes no arguments,
+and use closure to pass any “arguments” for the new thread to {\tt Run}.
 
 \subsection{Other Models}
 
