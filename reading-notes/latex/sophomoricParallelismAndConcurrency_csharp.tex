@@ -739,32 +739,32 @@ This section shows how to use threads and shared memory to implement
 simple parallel algorithms.  The only synchronization primitive we
 will need is {\tt join}, which causes one thread to wait until another
 thread has terminated.  We begin with simple pseudocode and then show
-how using threads in Java to achieve the same idea requires a bit more
-work (Section~\ref{sec:java-threads}).  We then argue that it is best
+how using threads in C\# to achieve the same idea requires a bit more
+work (Section~\ref{sec:csharp-threads}).  We then argue that it is best
 for parallel code to \emph{not} be written in terms of the number of
 processors available (Section~\ref{sec:no-numprocs}) and show how to
 use recursive divide-and-conquer instead
-(Section~\ref{sec:divide-conquer}).  Because Java's threads are not
-engineered for this style of programming, we switch to the Java
-ForkJoin framework which is designed for our needs
-(Section~\ref{sec:java-fjf}).  With all of this discussion in terms of
+(Section~\ref{sec:divide-conquer}).  Because C\# threads are not
+engineered for this style of programming, we switch to the .Net Task
+Parallel Library which is designed for our needs
+(Section~\ref{sec:dotnet-tpl}).  With all of this discussion in terms of
 the single problem of summing an array of integers, we then turn to
 other similar problems, introducing the terminology of \emph{maps} and
 \emph{reduces} (Section~\ref{sec:map-reduce}) as well as data
 structures other than arrays (Section~\ref{sec:beyond-arrays}).
 
 \subsection{A Simple Example: Okay Idea, Inferior Style}
-\label{sec:java-threads}
+\label{sec:csharp-threads}
 
 Most of this section will consider the problem of computing the sum of
 an array of integers.  An $O(n)$ sequential solution to this problem
 is trivial:
 \begin{verbatim}
-int sum(int[] arr) {
-   int ans = 0;
-   for(int i=0; i < arr.length; i++)
-      ans += arr[i];
-   return ans;
+int Sum(int[] arr) {
+    int ans = 0;
+    for (int i = 0; i < arr.Length; i++)
+        ans += arr[i];
+    return ans;
 }
 \end{verbatim}
 If the array is large and we have extra processors available, we can
@@ -818,24 +818,24 @@ iterations.\footnote{We must take care to avoid bugs due to
   \emph{not} be correct.}
 \goodbreak
 \begin{verbatim}
-int sum(int[] arr) {
-  results = new int[4];
-  len = arr.length;
-  FORALL(i=0; i < 4; ++i) {
-     results[i] = sumRange(arr,(i*len)/4,((i+1)*len)/4);
-  }
-  return results[0] + results[1] + results[2] + results[3];
+int Sum(int[] arr) {
+    results = new int[4];
+    len = arr.Length;
+    FORALL(i=0; i < 4; ++i) {
+        results[i] = sumRange(arr,(i*len)/4,((i+1)*len)/4);
+    }
+    return results[0] + results[1] + results[2] + results[3];
 }
-int sumRange(int[] arr, int lo, int hi) {
-   result = 0;
-   for(j=lo; j < hi; ++j)
-      result += arr[j];
-   return result;
+int SumRange(int[] arr, int lo, int hi) {
+    result = 0;
+    for(j=lo; j < hi; ++j)
+        result += arr[j];
+    return result;
 }
 \end{verbatim}
 
-Unfortunately, Java and most other general-purpose languages do not
-have a {\tt FORALL} loop.  (Java has various kinds of for-loops, but
+Unfortunately, C\# and most other general-purpose languages do not
+have a {\tt FORALL} loop.  (C\# has various kinds of for-loops, but
 all run all iterations on one thread.)  We can encode this programming pattern
 explicitly using threads as follows:
 \begin{enumerate}
@@ -856,60 +856,73 @@ versions are always clearly indicated.
 
 Here is our WRONG attempt:
 \begin{verbatim}
-class SumThread extends java.lang.Thread {
-   int lo; // fields for communicating inputs
-   int hi;
-   int[] arr;
-   int ans = 0; // for communicating result 
-   SumThread(int[] a, int l, int h) { 
-     lo=l; hi=h; arr=a;
-   }
-   public void run() { // overriding, must have this type
-     for(int i=lo; i<hi; i++)
-       ans += arr[i];
-   }
+class SumRange
+{
+    int left;
+    int right;
+    int[] arr;
+    public int Answer { get; private set; }
+
+    public SumRange(int[] a, int left, int right)
+    {
+        this.left = left;
+        this.right = right;
+        this.arr = a;
+        Answer = 0;
+    }
+
+    public void Run()
+    {
+        for (int i = left; i < right; i++)
+        {
+            Answer += arr[i];
+        }
+    }
 }
-class C {
-  static int sum(int[] arr) {
-    int len = arr.length;
+
+public static int Sum(int[] arr)
+{
+    int len = arr.Length;
     int ans = 0;
-    SumThread[] ts = new SumThread[4];
-    for(int i=0; i < 4; i++) {
-      ts[i] = new SumThread(arr,(i*len)/4,((i+1)*len)/4);
-      ts[i].start();
+
+    SumRange[] s = new SumRange[4];
+    for (int i = 0; i < 4; i++)
+    {
+        SumRange sr = new SumRange(arr, (i * len) / 4, ((i + 1) * len) / 4);
+        s[i] = sr;
+        Thread t = new Thread(() => sr.Run());
+        t.Start();
     }
-    for(int i=0; i < 4; i++) {
-      ans += ts[i].ans;
+
+    for (int i = 0; i < 4; i++)
+    {
+        ans += s[i].Answer;
     }
+
     return ans;
-  }
 }
 \end{verbatim}
 
-The code above gets most of the pieces right.  The {\tt sum} method
-creates 4 instances of {\tt SumThread}, which is a subclass of {\tt
-  java.lang.Thread}, and calls {\tt start} on each of them.  The {\tt
-  SumThread} constructor takes as arguments the data that the thread
-needs to do its job, in this case, the array and the range for which
-this thread is responsible.  (We use a convenient convention that
+The code above gets most of the pieces right.  The {\tt Sum} method
+creates 4 instances of {\tt SumRange} and then creates instances of
+{\tt System.Threading.Thread} to call {\tt Run} on each of them.
+The {\tt SumRange} constructor takes as arguments the data that the
+thread needs to do its job, in this case, the array and the range for
+which this thread is responsible.  (We use a convenient convention that
 ranges \emph{include} the low bound and \emph{exclude} the high
-bound.)  The {\tt SumThread} constructor stores this data in fields of
-the object so that the new thread has access to them in the {\tt run}
-method.  (Typically {\tt run} would pass the relevant data to helper
-methods, but here the problem is simple enough not to bother.)
+bound.)  The {\tt SumRange} constructor stores this data in fields of
+the object so that the new thread has access to them in the {\tt Run}
+method.
 
-Notice each {\tt SumThread} object also has an {\tt ans} field.  This
-is shared memory for communicating the answer back from the helper
-thread to the main thread.  In particular, for the thread created on
-the {\tt i}th iteration of the for-loop in {\tt sum}, the field {\tt
-  this.ans} is an alias for {\tt ts[i].ans}.  So the main thread can
-sum the 4 {\tt ans} fields from the threads it created to produce the
-final answer.
+Notice each {\tt SumRange} object also has an {\tt Answer} property. 
+This is shared memory for communicating the answer back from the helper 
+thread to the main thread. So the main thread can sum the 4 {\tt Answer} 
+properties from the threads it created to produce the final answer.
 
 The bug in this code has to do with synchronization: The main thread
 does not wait for the helper threads to finish before it sums the
-{\tt ans} fields.  Remember that {\tt start} returns immediately ---
-otherwise we would not get any parallelism.  So the {\tt sum} method's
+{\tt Answer} properties.  Remember that {\tt Start} returns immediately ---
+otherwise we would not get any parallelism.  So the {\tt Sum} method's
 second for-loop probably starts running before the helper threads are
 finished with their work.  Having one thread (the main thread) read a
 field while another thread (the helper thread) is writing the same
@@ -917,24 +930,23 @@ field is a bug, and here it would produce a wrong (too-small)
 answer.  We need to delay the second for-loop until the helper
 threads are done.
 
-There is a method in {\tt java.lang.Thread}, and therefore in all its
-subclasses such as {\tt SumThread}, that is just what we need.  If one
-thread, in our case the main thread, calls the {\tt join} method of a
-{\tt java.lang.Thread} object, in our case one of the helper threads,
-then this call \emph{blocks} (i.e., does not return) unless/until the thread
-corresponding to the object has terminated.  So we can add another
-for-loop to {\tt sum} in-between the two loops already there to make
-sure all the helper threads finish before we add together the results:
+There is a method in {\tt System.Threading.Thread} that is just what 
+we need. If one thread, in our case the main thread, calls the {\tt Join} 
+method of a {\tt System.Threading.Thread} object, in our case one of 
+the helper threads, then this call blocks (i.e., does not return) unless/until 
+the thread corresponding to the object has terminated. So we can add 
+another for-loop to {\tt Sum} in-between the two loops already there 
+to make sure all the helper threads finish before we add together the results:
 \begin{verbatim}
 for(int i=0; i < 4; i++)
-   ts[i].join();
+   ts[i].Join();
 \end{verbatim}
-Notice it is the main thread that is calling {\tt join}, which takes
+Notice it is the main thread that is calling {\tt Join}, which takes
 no arguments.  On the first loop iteration, the main thread will block
 until the first helper thread is done.  On the second loop iteration,
 the main thread will block until the second helper thread is done.  It
 is certainly possible that the second helper thread actually finished
-before the first thread.  This is not a problem: a call to {\tt join}
+before the first thread.  This is not a problem: a call to {\tt Join}
 when the helper thread has already terminated just returns right away
 (no blocking).
 
@@ -953,40 +965,30 @@ is not the most descriptive English word for the concept.
 
 It is common to combine the joining for-loop and the
 result-combining for-loop. Understanding why this is still correct
-helps understand the {\tt join} primitive.  So far we have suggested
-writing code like this in our {\tt sum} method:
+helps understand the {\tt Join} primitive.  So far we have suggested
+writing code like this in our {\tt Sum} method:
 \goodbreak
 \begin{verbatim}
 for(int i=0; i < 4; i++)
-   ts[i].join();
-for(int i=0; i < 4; i++) 
-   ans += ts[i].ans;
+    t[i].Join();
+for(int i=0; i < 4; i++)
+    ans += s[i].Answer;
 return ans;
 \end{verbatim}
 There is nothing wrong with the code above, but the following is also
 correct:
 \begin{verbatim}
-for(int i=0; i < 4; i++) {
-   ts[i].join();
-   ans += ts[i].ans;
+for(int i=0; i < 4; i++)
+{
+    t[i].Join();
+    ans += s[i].Answer;
 }
 return ans;
 \end{verbatim}
 Here we do not wait for all the helper threads to finish before we
 start producing the final answer.  But we still ensure that the main
-thread does not access a helper thread's {\tt ans} field until at least that
+thread does not access a helper thread's {\tt Answer} property until at least that
 helper thread has terminated.
-
-There is one last Java-specific detail we need when using the {\tt
-  join} method defined in {\tt java.lang.Thread}.  It turns out this
-method can throw a {\tt java.lang.InterruptedException} so a method
-calling {\tt join} will not compile unless it catches this exception
-or declares that it might be thrown.  For concurrent programming, it
-may be bad style to ignore this exception, but for basic parallel
-programming like we are doing, this exception is a nuisance and will
-not occur.  So we will say no more about it.  Also the ForkJoin
-framework we will use starting in Section~\ref{sec:java-fjf} has a
-different {\tt join} method that does not throw exceptions.
 
 Here, then, is a complete and correct program.  \footnote{Technically,
   for very large arrays, {\tt i*len} might be too large and we should
@@ -994,41 +996,60 @@ Here, then, is a complete and correct program.  \footnote{Technically,
   ignore this detail throughout this chapter to avoid distractions,
   but {\tt long} is a wiser choice when dealing with arrays that may
   be very large.}  There is no change to
-the {\tt SumThread} class.  This example shows many of the key
+the {\tt SumRange} class.  This example shows many of the key
 concepts of fork-join parallelism, but Section~\ref{sec:no-numprocs}
 will explain why it is poor style and can lead to suboptimal
-performance.  Sections~\ref{sec:divide-conquer} and~\ref{sec:java-fjf}
+performance.  Sections~\ref{sec:divide-conquer} and~\ref{sec:dotnet-tpl}
 will then present a similar but better approach.
 
 \begin{verbatim}
-class SumThread extends java.lang.Thread {
-   int lo; // fields for communicating inputs
-   int hi;
-   int[] arr;
-   int ans = 0; // for communicating result 
-   SumThread(int[] a, int l, int h) { 
-     lo=l; hi=h; arr=a;
-   }
-   public void run() { // overriding, must have this type
-     for(int i=lo; i<hi; i++)
-       ans += arr[i];
-   }
+class SumRange
+{
+    int left;
+    int right;
+    int[] arr;
+    public int Answer { get; private set; }
+
+    public SumRange(int[] a, int left, int right)
+    {
+        this.left = left;
+        this.right = right;
+        this.arr = a;
+        Answer = 0;
+    }
+
+    public void Run()
+    {
+        for (int i = left; i < right; i++)
+        {
+            Answer += arr[i];
+        }
+    }
 }
-class C {
-  static int sum(int[] arr) throws java.lang.InterruptedException {
-    int len = arr.length;
+
+public static int Sum(int[] arr)
+{
+    int len = arr.Length;
     int ans = 0;
-    SumThread[] ts = new SumThread[4];
-    for(int i=0; i < 4; i++) {
-      ts[i] = new SumThread(arr,(i*len)/4,((i+1)*len)/4);
-      ts[i].start();
+
+    SumRange[] s = new SumRange[4];
+    Thread[] t = new Thread[4];
+    for (int i = 0; i < 4; i++)
+    {
+        SumRange sr = new SumRange(arr, (i * len) / 4, ((i + 1) * len) / 4);
+        s[i] = sr;
+        t[i] = new Thread(sr.Run);
+        t[i].Start();
     }
-    for(int i=0; i < 4; i++) {
-      ts[i].join();
-      ans += ts[i].ans;
+
+    for (int i = 0; i < 4; i++)
+    {
+        t[i].Join();
+        ans += s[i].Answer;
     }
+
     return ans;
-  }
+}
 \end{verbatim}
 
 \subsection{Why Not To Use One Thread Per Processor}
@@ -1037,11 +1058,11 @@ class C {
 Having now presented a basic parallel algorithm, we will argue that
 the approach the algorithm takes is poor style and likely to lead to
 unnecessary inefficiency.  Do not despair: the concepts we have
-learned like creating threads and using {\tt join} will remain useful
+learned like creating threads and using {\tt Join} will remain useful
 --- and it was best to explain them using a too-simple approach.
 Moreover, many parallel programs are written in pretty much exactly
 this style, often because libraries like those in
-Section~\ref{sec:java-fjf} are unavailable.  Fortunately, such
+Section~\ref{sec:dotnet-tpl} are unavailable.  Fortunately, such
 libraries are now available on many platforms.
 
 The problem with the previous approach was dividing the work into
@@ -1073,25 +1094,34 @@ time we run it on a computer with a different number of processors.
 
 A natural solution is a core software-engineering principle you
 should already know: Do not use constants where a variable is 
-appropriate.  Our {\tt sum} method can take as a parameter the number
+appropriate.  Our {\tt Sum} method can take as a parameter the number
 of threads to use, leaving it to some other part of the program to
-decide the number.  (There are Java library methods to ask for the
+decide the number.  (There are C\# library methods to ask for the
 number of processors on the computer, for example, but we argue next
 that using that number is often unwise.)  It would look like this:
 \begin{verbatim}
-static int sum(int[] arr, int numThreads) throws java.lang.InterruptedException {
-  int len = arr.length;
-  int ans = 0;
-  SumThread[] ts = new SumThread[numThreads];
-  for(int i=0; i < numThreads; i++) {
-    ts[i] = new SumThread(arr,(i*len)/numThreads,((i+1)*len)/numThreads);
-    ts[i].start();
-  }
-  for(int i=0; i < numThreads; i++) {
-    ts[i].join();
-    ans += ts[i].ans;
-  }
-  return ans;
+public static int Sum(int[] arr, int numThreads)
+{
+    int len = arr.Length;
+    int ans = 0;
+
+    SumRange[] s = new SumRange[numThreads];
+    Thread[] t = new Thread[numThreads];
+    for (int i = 0; i < numThreads; i++)
+    {
+        SumRange sr = new SumRange(arr, (i * len) / numThreads, ((i + 1) * len) / numThreads);
+        s[i] = sr;
+        t[i] = new Thread(sr.Run);
+        t[i].Start();
+    }
+
+    for (int i = 0; i < numThreads; i++)
+    {
+        t[i].Join();
+        ans += s[i].Answer;
+    }
+
+    return ans;
 }
 \end{verbatim}
 Note that you need to be careful with integer division not to
@@ -1104,10 +1134,10 @@ introduce rounding errors when dividing the work.
 The second dubious assumption made so far is that every processor is
 available to the code we are writing.  But some processors may be
 needed by other programs or even other parts of the same program.  We
-have parallelism after all --- maybe the caller to {\tt sum} is
+have parallelism after all --- maybe the caller to {\tt Sum} is
 already part of some outer parallel algorithm.  The operating system
 can reassign processors at any time, even when we are in the middle of
-summing array elements.  It is fine to assume that the underlying Java
+summing array elements.  It is fine to assume that the underlying C\#
 implementation will try to use the available processors effectively,
 but we should not assume 4 or even {\tt numThreads} processors will be
 available from the beginning to the end of running our parallel algorithm.  
@@ -1117,7 +1147,7 @@ available from the beginning to the end of running our parallel algorithm.
   approximately equal pieces}
 \medskip
 
-In our {\tt sum} example, it is quite likely that the threads
+In our {\tt Sum} example, it is quite likely that the threads
 processing equal-size chunks of the array take approximately the same
 amount of time.  They may not, due to memory-hierarchy issues or other
 architectural effects, however.  Moreover, more sophisticated
@@ -1171,21 +1201,21 @@ one of the cooks might take a break (processor used for a different
 program) before finishing his/her pile.
 
 Unfortunately, this approach still has two problems addressed in
-Sections~\ref{sec:divide-conquer} and~\ref{sec:java-fjf}.
+Sections~\ref{sec:divide-conquer} and~\ref{sec:dotnet-tpl}.
 \begin{enumerate}
 \item We now have more results to combine.  Dividing the array into 4
   total pieces leaves $\Theta(1)$ results to combine.  Dividing the array
-  into 1000-element chunks leaves {\tt arr.length}/1000, which is
+  into 1000-element chunks leaves {\tt arr.Length}/1000, which is
   $\Theta(n)$, results to combine.  Combining the results with a
   sequential for-loop produces an $\Theta(n)$ algorithm, albeit
   with a smaller constant factor.  To see the problem even more
   clearly, suppose we go to the extreme and use 1-element chunks ---
   now the results combining reimplements the original sequential
   algorithm.  In short, we need a better way to combine results.
-\item Java's threads were not designed for small tasks like adding
+\item C\# threads were not designed for small tasks like adding
   1000 numbers.  They will work and produce the correct answer, but
-  the constant-factor overheads of creating a Java thread are far too
-  large.  A Java program that creates 100,000 threads on a small
+  the constant-factor overheads of creating a C\# thread are far too
+  large.  A C\# program that creates 100,000 threads on a small
   desktop computer is unlikely to run well at all --- each thread just
   takes too much memory and the scheduler is overburdened and provides
   no asymptotic run-time guarantee.  In short, we need a different
@@ -1197,7 +1227,7 @@ Sections~\ref{sec:divide-conquer} and~\ref{sec:java-fjf}.
 \label{sec:divide-conquer}
 
 This section presents the idea of divide-and-conquer parallelism using
-Java's threads.  Then Section~\ref{sec:java-fjf} switches to using a
+C\# threads.  Then Section~\ref{sec:dotnet-tpl} switches to using a
 library where this programming style is actually efficient.  This
 progression shows that we can understand all the ideas using the basic
 notion of threads even though in practice we need a library that is
@@ -1268,12 +1298,11 @@ of this tree is $\log n$ for a range of size $n$.  See
 Figure~\ref{fig:recursive_calls_binary_tree}, which shows the recursion in
 a more conventional tree form where the number of nodes is growing
 exponentially faster than the tree height.
-With enough
-processors, the total running time corresponds to the tree \emph{height}, not
-the tree \emph{size}: this is the fundamental running-time benefit of
-parallelism.  Later sections will discuss why the problem of summing
-an array has such an efficient parallel algorithm; not every problem
-enjoys exponential improvement from parallelism.
+With enough processors, the total running time corresponds to the 
+tree \emph{height}, not the tree \emph{size}: this is the fundamental 
+running-time benefit of parallelism.  Later sections will discuss why 
+the problem of summing an array has such an efficient parallel algorithm; 
+not every problem enjoys exponential improvement from parallelism.
 
 \begin{figure}
 \begin{center}
@@ -1290,65 +1319,74 @@ enjoys exponential improvement from parallelism.
 
 Having described the algorithm in English, seen an example, and
 informally analyzed its running time, let us now consider an actual
-implementation with Java threads and then modify it with two important
+implementation with C\# threads and then modify it with two important
 improvements that affect only constant factors, but the constant
 factors are large.  Then the next section will show the ``final''
 version where we use the improvements and use a different library for
 the threads.
 
-To start, here is the algorithm directly translated into Java,
-omitting some boilerplate like putting the main {\tt sum} method in a
-class and handling {\tt java.lang.InterruptedException}.\footnote{For
-  the exception, you cannot declare that {\tt run} throws this
-  exception because it overrides a method in {\tt java.lang.Thread} that
-  does not have this declaration.  Since this exception is not going
-  to be raised, it is reasonable to insert a {\tt catch} statement and
-  ignore this exception.  The Java ForkJoin Framework introduced in
-  Section~\ref{sec:java-fjf} does not have this problem; its {\tt
-    join} method does not throw checked exceptions.}
+To start, here is the algorithm directly translated into C\#,
+omitting some boilerplate like putting the main {\tt Sum} method in a
+class and handling exceptions.\footnote{This may fail to compute the 
+ correct result in default .Net settings. By default every thread in 32 
+ bit app gets 1 Mb of memory in .Net. And the whole app gets 2 Gb. So 
+ creating about 2000 threads can easily make app run out of memory. 
+ The .Net Task Parallel Library introduced in Section~\ref{sec:dotnet-tpl} 
+ does not have this problem.}
 \begin{verbatim}
-class SumThread extends java.lang.Thread {
-  int lo; // fields for communicating inputs
-  int hi; 
-  int[] arr; 
-  int ans = 0; // for communicating result
-  SumThread(int[] a, int l, int h) { arr=a; lo=l; hi=h; }
-  public void run() {
-    if(hi - lo == 1) {
-      ans = arr[lo];
-    } else {
-      SumThread left  = new SumThread(arr,lo,(hi+lo)/2);
-      SumThread right = new SumThread(arr,(hi+lo)/2,hi);
-      left.start();
-      right.start();
-      left.join(); 
-      right.join();
-      ans = left.ans + right.ans;
+class SumRange
+{
+    int left;
+    int right;
+    int[] arr;
+    public int Answer { get; private set; }
+
+    public SumRange(int[] a, int l, int r)
+    {
+        left = l;
+        right = r;
+        arr = a;
+        Answer = 0;
     }
-  }
+
+    public void Run()
+    {
+        if (right - left == 1)
+        {
+            Answer = arr[left];
+        }
+        else
+        {
+            SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+            SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+            Thread leftThread = new Thread(leftRange.Run);
+            Thread rightThread = new Thread(rightRange.Run);
+            leftThread.Start();
+            rightThread.Start();
+            leftThread.Join();
+            rightThread.Join();
+
+            Answer = leftRange.Answer + rightRange.Answer;
+        }
+    }
 }
-int sum(int[] arr) { 
-   SumThread t = new SumThread(arr,0,arr.length);
-   t.run();
-   return t.ans;
+
+public static int Sum(int[] arr)
+{
+    SumRange s = new SumRange(arr, 0, arr.Length);
+    s.Run();
+    return s.Answer;
 }
 \end{verbatim}
 Notice how each thread creates two helper threads {\tt left} and {\tt
   right} and then waits for them to finish.  Crucially, the calls to
-  {\tt left.start} \emph{and} {\tt right.start} precede the calls to
-{\tt left.join} \emph{and} {\tt right.join}.  If for example, {\tt
-  left.join()} came before {\tt right.start()}, then the algorithm
+  {\tt left.Start} \emph{and} {\tt right.Start} precede the calls to
+{\tt left.Join} \emph{and} {\tt right.Join}.  If for example, {\tt
+  left.Join()} came before {\tt right.Start()}, then the algorithm
   would have no effective parallelism whatsoever.  It would still
   produce the correct answer, but so would the original much simpler
-  sequential program.  
-  
-  As a minor but important coding point, notice that the ``main'' {\tt
-    sum} method calls the {\tt run} method directly.  As such, this is
-  an ordinary method call like you have used since you started
-  programming; the caller and callee are part of the same thread.  The
-  fact that the object is a subclass of {\tt java.lang.Thread} is only
-  relevant if you call the ``magic'' {\tt start} method, which calls
-    {\tt run} in a new thread.
+  sequential program.
   
   In practice, code like this produces far too many threads to be
   efficient.  To add up four numbers, does it really make sense to
@@ -1363,32 +1401,53 @@ Notice how each thread creates two helper threads {\tt left} and {\tt
 Here is code using a cutoff of 1000.  As you can see, using a cutoff
 does not really complicate the code.
 \begin{verbatim}
-class SumThread extends java.lang.Thread {
-  static int SEQUENTIAL_CUTOFF = 1000;
-  int lo; // fields for communicating inputs
-  int hi; 
-  int[] arr;
-  int ans = 0; // for communicating result
-  SumThread(int[] a, int l, int h) { arr=a; lo=l; hi=h; }
-  public void run(){
-    if(hi - lo < SEQUENTIAL_CUTOFF) {
-      for(int i=lo; i < hi; i++)
-        ans += arr[i];
-    } else {
-      SumThread left = new SumThread(arr,lo,(hi+lo)/2);
-      SumThread right= new SumThread(arr,(hi+lo)/2,hi);
-      left.start();
-      right.start();
-      left.join(); 
-      right.join();
-      ans = left.ans + right.ans;
+class SumRange
+{
+    static int Sequential_Cutoff = 100;
+    int left;
+    int right;
+    int[] arr;
+    public int Answer { get; private set; }
+
+    public SumRange(int[] a, int l, int r)
+    {
+        left = l;
+        right = r;
+        arr = a;
+        Answer = 0;
     }
-  }
+
+    public void Run()
+    {
+        if (right - left < Sequential_Cutoff)
+        {
+            for (int i = left; i < right; i++)
+            {
+                Answer += arr[i];
+            }
+        }
+        else
+        {
+            SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+            SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+            Thread leftThread = new Thread(leftRange.Run);
+            Thread rightThread = new Thread(rightRange.Run);
+            leftThread.Start();
+            rightThread.Start();
+            leftThread.Join();
+            rightThread.Join();
+
+            Answer = leftRange.Answer + rightRange.Answer;
+        }
+    }
 }
-int sum(int[] arr) { 
-   SumThread t = new SumThread(arr,0,arr.length);
-   t.run();
-   return t.ans;
+
+public static int Sum(int[] arr)
+{
+    SumRange s = new SumRange(arr, 0, arr.Length);
+    s.Run();
+    return s.Answer;
 }
 \end{verbatim}
 
@@ -1413,7 +1472,7 @@ Use cutoffs!
 Our second improvement may seem anticlimactic compared to cutoffs
 because it only reduces the number of threads by an additional
 factor of two.  Nonetheless, it is worth seeing for efficiency
-especially because the ForkJoin Framework in the next section performs
+especially because the Task Parallel Library in the next section performs
 poorly if you do not do this optimization ``by hand.''  The key is to
 notice that all threads that create two helper threads are not doing
 much work themselves: they divide the work in half, give it to two
@@ -1421,79 +1480,99 @@ helpers, wait for them to finish, and add the results.  Rather than
 having all these threads wait around, it is more efficient to create
 \emph{one helper thread} to do half the work and have the thread do
 the other half \emph{itself}.  Modifying our code to do this is easy
-since we can just call the {\tt run} method directly, which recall is
-just an ordinary method call unlike the ``magic'' {\tt start} method.
+since we can just call the {\tt Run} method directly, without passing 
+it into "magic" {\tt Thread} object.
 \begin{verbatim}
-class SumThread extends java.lang.Thread {
-  static int SEQUENTIAL_CUTOFF = 1000;
-  int lo; // fields for communicating inputs
-  int hi; 
-  int[] arr; 
-  int ans = 0; // for communicating result
-  SumThread(int[] a, int l, int h) { arr=a; lo=l; hi=h; }
-  public void run(){
-    if(hi - lo < SEQUENTIAL_CUTOFF) {
-      for(int i=lo; i < hi; i++)
-        ans += arr[i];
-    } else {
-      SumThread left = new SumThread(arr,lo,(hi+lo)/2);
-      SumThread right= new SumThread(arr,(hi+lo)/2,hi);
-      left.start();
-      right.run();
-      left.join(); 
-      ans = left.ans + right.ans;
+class SumRange
+{
+    static int Sequential_Cutoff = 100;
+    int left;
+    int right;
+    int[] arr;
+    public int Answer { get; private set; }
+
+    public SumRange(int[] a, int l, int r)
+    {
+        left = l;
+        right = r;
+        arr = a;
+        Answer = 0;
     }
-  }
+
+    public void Run()
+    {
+        if (right - left < Sequential_Cutoff)
+        {
+            for (int i = left; i < right; i++)
+            {
+                Answer += arr[i];
+            }
+        }
+        else
+        {
+            SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+            SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+            Thread leftThread = new Thread(leftRange.Run);
+            leftThread.Start();
+            rightRange.Run();
+            leftThread.Join();
+
+            Answer = leftRange.Answer + rightRange.Answer;
+        }
+    }
 }
-int sum(int[] arr) { 
-   SumThread t = new SumThread(arr,0,arr.length);
-   t.run();
-   return t.ans;
+
+public static int Sum(int[] arr)
+{
+    SumRange s = new SumRange(arr, 0, arr.Length);
+    s.Run();
+    return s.Answer;
 }
 \end{verbatim}
-Notice how the code above creates two {\tt SumThread} objects, but only
-creates one helper thread with {\tt left.start()}.  It then does the
-right half of the work itself by calling {\tt right.run()}.  There is
-only one call to {\tt join} because only one helper thread was
+Notice how the code above creates two {\tt SumRange} objects, but 
+only creates one helper thread. It then does the right half of the 
+work itself by calling {\tt rightRange.Run()}. There is
+only one call to {\tt Join} because only one helper thread was
 created.  The order here is still essential so that the two halves of
-the work are done in parallel.  Creating a {\tt SumThread} object for
-the right half and then calling {\tt run} rather than creating a
+the work are done in parallel.  Creating a {\tt SumRange} object for
+the right half and then calling {\tt Run} rather than creating a
 thread may seem odd, but it keeps the code from getting more
 complicated and still conveys the idea of dividing the work into two
 similar parts that are done in parallel.
 
 Unfortunately, even with these optimizations, the code above will run
 poorly in practice, especially if given a large array.  The
-implementation of Java's threads is not engineered for threads that do
+implementation of C\# threads is not engineered for threads that do
 such a small amount of work as adding 1000 numbers: it takes much
 longer just to create, start running, and dispose of a thread.
 The space overhead may also be prohibitive. In particular, it is not
-uncommon for a Java implementation to pre-allocate the maximum amount
-of space it allows for the call-stack, which might be 2MB or more.  So
+uncommon for a C\# implementation to pre-allocate some amount of memory 
+for the stack, which might be 1MB or more.  So
 creating thousands of threads could use gigabytes of space.  Hence we
 will switch to the library described in the next section for parallel
-programming.  We will return to Java's threads when we learn
+programming.  We will return to C\# threads when we learn
 concurrency because the synchronization operations we will use work
-with Java's threads.
+with C\# threads.
 
-\subsection{The Java ForkJoin Framework}
-\label{sec:java-fjf}
+\subsection{The .Net Task Parallel Library}
+\label{sec:dotnet-tpl}
 
-Java 7 (and higher) includes classes in the {\tt java.util.concurrent} package
+.Net 4 (and higher) includes classes in the {\tt System.Threading} and {\tt System.Threading.Tasks} namespaces
 designed exactly for the kind of fine-grained fork-join parallel
 computing these notes use.  In addition to supporting lightweight
-threads (which the library calls ForkJoinTasks) that are small enough
+threads (which the library calls Tasks) that are small enough
 that even a million of them should not overwhelm the system, the
 implementation includes a scheduler and run-time system with provably
 optimal expected-time guarantees, as described in
 Section~\ref{sec:analyze-fork-join}.  Similar libraries for other
-languages include Intel's Thread Building Blocks, Microsoft's Task
-Parallel Library for C\#, and others.  The core ideas and
+languages include Intel's Thread Building Blocks, Java's ForkJoin Framework, 
+and others.  The core ideas and
 implementation techniques go back much further to the Cilk language,
 an extension of C developed since 1994.
 
 This section describes just a few practical details and library
-specifics.  Compared to Java threads, the core ideas are all the same,
+specifics.  Compared to C\# threads, the core ideas are all the same,
 but some of the method names and interfaces are different --- in
 places more complicated and in others simpler.  Naturally, we give a
 full example (actually two) for summing an array of numbers.  The
@@ -1501,19 +1580,12 @@ actual library contains many other useful features and classes, but we
 will use only the primitives related to forking and joining,
 implementing anything else we need ourselves.
 
-For introductory notes on using the library 
-and avoiding some difficult-to-diagnose pitfalls, see
-\url{http://www.cs.washington.edu/homes/djg/teachingMaterials/grossmanSPAC_forkJoinFramework.html}.
-The examples in these notes below assume Java 8 or higher; the url includes a
-small amount of extra code you need to modify these examples for Java
-7 or Java 6.
-
-We first show a full program (minus a {\tt main} method) that is as
-much as possible like the version we wrote using Java threads.  We
+We first show a full program that is as
+much as possible like the version we wrote using C\# threads.  We
 show a version using a sequential cut-off and only one helper thread
 at each recursive subdivision though removing these important
 improvements would be easy.  After discussing this version, we show a
-second version that uses Java's generic types and a different library
+second version that uses C\# generic types and a different library
 class.  This second version is better style, but easier to understand
 after the first version.
 
@@ -1521,177 +1593,161 @@ after the first version.
 \noindent FIRST VERSION (INFERIOR STYLE):
 
 \begin{verbatim}
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveAction;
+using System.Threading.Tasks;
 
-class SumArray extends RecursiveAction {
-   static int SEQUENTIAL_THRESHOLD = 1000;
+public class  public class DivideAndConquerTaskParallel
+{
+    class SumRange
+    {
+        static int Sequential_Cutoff = 100;
+        int left;
+        int right;
+        int[] arr;
+        public int Answer { get; private set; }
 
-   int lo;
-   int hi;
-   int[] arr;
-   int ans = 0;
-   SumArray(int[] a, int l, int h) { lo=l; hi=h; arr=a; }
+        public SumRange(int[] a, int l, int r)
+        {
+            left = l;
+            right = r;
+            arr = a;
+            Answer = 0;
+        }
 
-   protected void compute() {
-      if(hi - lo <= SEQUENTIAL_THRESHOLD) {
-         for(int i=lo; i < hi; ++i)
-            ans += arr[i];
-      } else {
-          SumArray left  = new SumArray(arr,lo,(hi+lo)/2);
-          SumArray right = new SumArray(arr,(hi+lo)/2,hi);
-          left.fork();
-          right.compute();
-          left.join();
-          ans = left.ans + right.ans;
-      }
+        public void Run()
+        {
+            if (right - left < Sequential_Cutoff)
+            {
+                for (int i = left; i < right; i++)
+                {
+                    Answer += arr[i];
+                }
+            }
+            else
+            {
+                SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+                SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+                Task leftTask = Task.Factory.StartNew(leftRange.Run);
+                rightRange.Run();
+                leftTask.Wait();
+
+                Answer = leftRange.Answer + rightRange.Answer;
+            }
+        }
     }
-}
-class Main {
-  static int sumArray(int[] array) {
-     SumArray t = new SumArray(array,0,array.length);
-     ForkJoinPool.commonPool().invoke(t);
-     return t.ans;
-  }
+
+    public static int Sum(int[] arr)
+    {
+        SumRange s = new SumRange(arr, 0, arr.Length);
+        s.Run();
+        return s.Answer;
+    }
 }
 \end{verbatim}
 
-While there are many differences compared to using Java's threads, the
-overall structure of the algorithm should look similar.  Furthermore,
-most of the changes are just different names for classes and methods:
+There are some differences compared to using C\# threads, but 
+the overall structure of the algorithm should look similar. 
+Furthermore, most of the changes are just different names for classes and methods:
 \begin{itemize}
-\item Subclass {\tt java.util.concurrent.RecursiveAction} instead
-  of {\tt java.lang.Thread}.
-\item The method that ``magically'' creates parallelism is called {\tt
-    fork} instead of {\tt start}.
-\item The method that starts executing when a new thread begins is
-  called {\tt compute} instead of {\tt run}.  Recall these methods can
-  also be called normally.
-\item (The method {\tt join} is still called {\tt join}.)
+\item Class {\tt System.Threading.Tasks.Task} instead of {\tt System.Threading.Thread}.
+\item Parallelism starts with static method call {\tt Task.Factory.StartNew}.
+\item Method for waiting another task's finish is now called {\tt Wait} instead of {\tt Join}.
 \end{itemize}
 
-The small additions involve starting the computation with a call to
-{\tt ForkJoinPool.commonPool().invoke}
-These are just some details because
-the library is not built into the Java \emph{language}, so we have to
-do a little extra to initialize the library and start using it.  Here
-is all you really need to know:
-\begin{itemize}
-\item The entire program should have exactly one {\tt ForkJoinPool},
-  so it makes sense to store it in a static field and use it for all
-  the parallel algorithms in your program.  The library's {\tt
-  commonPool} static method returns such an object for you.
-\item Inside a subclass of {\tt RecursiveAction}, you use {\tt fork},
-  {\tt compute}, and {\tt join} just like we previously used {\tt
-    start}, {\tt run}, and {\tt join}.  But outside such classes, you
-  cannot use these methods or the library may not work correctly.  To
-  ``get the parallelism started,'' you instead use the {\tt invoke} method
-  of the {\tt ForkJoinPool}.  You pass to {\tt invoke} a subclass of {\tt
-    RecursiveAction} and that object's {\tt compute} method will be
-  called.  Basically, use {\tt invoke} once to start the algorithm and
-  then {\tt fork} or {\tt compute} for the recursive calls.
-  Conversely, do \emph{not} use {\tt invoke} from ``inside'' the
-  library, i.e., in {\tt compute} or any helper methods it uses.
-\end{itemize}
+Such details as starting a new task with {\tt System.Threading.Thread} 
+are there because the library is not built into the C\# language, so 
+we have to do a little extra to use it. What you really need to know is 
+that {\tt Task} instances should not be created explicitly, but rather 
+by the tasks factory, so that the library could deal with underlying 
+details such as the partitioning of the work, the scheduling of threads 
+on the {\tt ThreadPool}, cancellation support, state management, and 
+other low-level details. Otherwise {\tt Task} is very similar to {\tt Thread}, 
+with {\tt Start} and {\tt Wait} being used just as we used {\tt Start} 
+and {\tt Join} before.
 
-We will present one final version of our array-summing program to
-demonstrate one more class of the ForkJoin Framework that you should
-use as a matter of style.  The {\tt RecursiveAction} class is best
-only when the subcomputations do not produce a result, whereas in our
-example they do: the sum of the range.  It is quite common not to
-produce a result, for example a parallel program that increments every
-element of an array.  So far, the way we have ``returned'' results is
-via a field, which we called {\tt ans}.  
+We will present one final version of our array-summing program to demonstrate 
+one more aspect of TPL that you should use as a matter of style. The {\tt Task} 
+class is best only when the subcomputations do not produce a result, whereas 
+in our example they do: the sum of the range. It is quite common not to produce 
+a result, for example a parallel program that increments every element of an 
+array. So far, the way we have “returned” results is via a property, 
+which we called {\tt Answer}.
 
-Instead, we can subclass {\tt RecursiveTask} instead of {\tt
-  RecursiveAction}.  However, {\tt RecursiveTask} is a generic class
-with one type parameter: the type of value that {\tt compute} should
-return.  Here is the full version of the code using this more
-  convenient and less error-prone class, followed by an explanation:
+Instead, we can use generic class {\tt Task<T>} instead of {\tt Task}. The type 
+parameter here is the type of value that passed delegate should return. 
+Here is the full version of the code using this more convenient and less 
+error-prone class, followed by an explanation:
 
 \medskip
 \noindent FINAL, BETTER VERSION:
 
 \begin{verbatim}
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.RecursiveTask;
+using System.Threading.Tasks;
 
-class SumArray extends RecursiveTask<Integer> {
-   static int SEQUENTIAL_THRESHOLD = 1000;
+public class DivideAndConquerTaskParallelResult
+{
+    class SumRange
+    {
+        static int Sequential_Cutoff = 100;
+        int left;
+        int right;
+        int[] arr;
 
-   int lo;
-   int hi;
-   int[] arr;
-   SumArray(int[] a, int l, int h) { lo=l; hi=h; arr=a; }
+        public SumRange(int[] a, int l, int r)
+        {
+            left = l;
+            right = r;
+            arr = a;
+        }
 
-   public Integer compute() {
-      if(hi - lo <= SEQUENTIAL_THRESHOLD) {
-         int ans = 0;
-         for(int i=lo; i < hi; ++i)
-            ans += arr[i];
-         return ans;
-      } else {
-          SumArray left  = new SumArray(arr,lo,(hi+lo)/2);
-          SumArray right = new SumArray(arr,(hi+lo)/2,hi);
-          left.fork();
-          int rightAns = right.compute();
-          int leftAns = left.join();
-          return leftAns + rightAns;
-      }
+        public int Run()
+        {
+            if (right - left < Sequential_Cutoff)
+            {
+                int ans = 0;
+                for (int i = left; i < right; i++)
+                {
+                    ans += i;
+                }
+                return ans;
+            }
+            else
+            {
+                SumRange leftRange = new SumRange(arr, left, (left + right) / 2);
+                SumRange rightRange = new SumRange(arr, (left + right) / 2, right);
+
+                Task<int> leftTask = Task.Factory.StartNew<int>(leftRange.Run);
+                int rightAns = rightRange.Run();
+                leftTask.Wait();
+                int leftAns = leftTask.Result;
+
+                return leftAns + rightAns;
+            }
+        }
     }
-}
-class Main {
-  static int sumArray(int[] array) {
-     return ForkJoinPool.commonPool().invoke(new SumArray(array,0,array.length));
-  }
+
+    public static int Sum(int[] arr)
+    {
+        SumRange s = new SumRange(arr, 0, arr.Length);
+        return s.Run();
+    }
 }
 \end{verbatim}
 
-Here are the differences from the version that subclasses {\tt
-  RecursiveAction}:
+Here are the differences from the version that uses non-generic {\tt
+  Task}:
 \begin{itemize}
-\item {\tt compute} returns an object of whatever (object) type we
-  want.  Because {\tt int} is not an object type, we write {\tt
-    Integer} instead.  Java implicitly converts an {\tt int} to/from
-  an {\tt Integer} in all the places it is needed in this program.
-\item The {\tt join} method also returns the value returned by {\tt
-    compute} in the thread that is being joined to.  Therefore, we do
-    not need an {\tt ans} field: we write {\tt int leftAns =
-    left.join()} to get the value that the thread bound to {\tt left}
-    returned from its {\tt compute} method.
-\item The {\tt invoke} method works similarly when passed a subclass
-  of a {\tt RecursiveTask} class: It returns the value of the {\tt
-  compute} method that is called.
-\item The class declaration of {\tt SumArray} indicates that it
-  extends {\tt RecursiveTask<Integer>}.  More generally, always
-  put the same type between the angle brackets as the return type of {\tt
-    compute}.
-\item Note that because Java expressions are always evaluated
-  left-to-right, we could replace the last 3 lines of the else-branch
-  in {\tt compute} with just {\tt return right.compute() +
-  left.join();}.  But this is rather subtle --- {\tt left.join() +
-  right.compute()} would destroy the parallelism --- so we do not
-  advise writing this shorter but less clear code.
+\item {\tt Answer} property is gone.
+\item {\tt Run} returns an integer as a result of computation.
+\item We use {tt Task<int>} instead of {\tt Task}.
+\item Tasks now have an additional property {\tt Result} which we 
+ use to get result of a task run.
 \end{itemize}
 
-If you are familiar with Java's generic types, this use of them should
+If you are familiar with C\# generic types, this use of them should
 not be particularly perplexing.  The library is also using static
-overloading for the {\tt invoke} method.  But as \emph{users} of the
+overloading for the {\tt StartNew} method.  But as \emph{users} of the
 library, it suffices just to follow the pattern in the example above.
-
-Why is there {\tt RecursiveAction} and {\tt RecursiveTask}?  The
-former is better style when there really is nothing to return;
-otherwise {\tt RecursiveTask} is better.  Both are actually
-implemented in terms of the same superclass inside the library.  You
-can use that class directly, but it is less convenient.
-
-Given the convenience of not needing a field for returning values, why
-not also provide the convenience of not needing fields to pass
-arguments ({\tt arr}, {\tt lo}, and {\tt hi})?  That \emph{would} be
-nice, but there just isn't a particularly pleasant way to write such a
-library in Java.  The ForkJoin framework is just a library; it cannot
-make any changes/extensions to the Java language.  It uses some
-advanced Java features to be as convenient as it can be.
 
 \subsection{Reductions and Maps}
 \label{sec:map-reduce}
@@ -1744,24 +1800,28 @@ However, we should be clear that \emph{not every problem over an array
   getting into arcane problems, let's just describe a general
   situation.  Suppose you have sequential code like this:
 \begin{verbatim}
-  interface BinaryOperation<T> {
-     T m(T x, T y);
-  }
-  class C<T> {
-     T fold(T[] arr, BinaryOperation<T> binop, T initialValue) {
-       T ans = initialValue;
-       for(int i=0; i < arr.length; ++i) 
-         ans = binop.m(ans,arr[i]);
-       return ans;
-     }
-   }
+interface BinaryOperation<T>
+{
+    T M(T x, T y);
+}
+
+class C<T>
+{
+    T Fold(T[] arr, BinaryOperation<T> binop, T initialValue)
+    {
+        T ans = initialValue;
+        for (int i = 0; i < arr.Length; i++)
+            ans = binop.M(ans, arr[i]);
+        return ans;
+    }
+}
 \end{verbatim}
-The name {\tt fold} is conventional for this sort of algorithm.  The
+The name {\tt Fold} is conventional for this sort of algorithm.  The
 idea is to start with {\tt initialValue} and keep updating the
-``answer so far'' by applying some binary function {\tt m} to the
+``answer so far'' by applying some binary function {\tt M} to the
 current answer and the next element of the array.
 
-Without any additional information about what {\tt m} computes,
+Without any additional information about what {\tt M} computes,
 this algorithm cannot be effectively parallelized since we cannot
 process {\tt arr[i]} until we know the answer from the first {\tt i-1}
 iterations of the for-loop.  For a more humorous example of a
@@ -1779,7 +1839,7 @@ find-the-leftmost-index-holding 42 algorithm is correct because
 Because reductions using associative operators are so common, we could
 write one generic algorithm that took the operator, and what to do for
 a base case, as arguments.  This is an example of higher-order
-programming, and the fork-join framework has several classes providing
+programming, and the Task Parallel Library has several classes providing
 this sort of functionality.  Higher-order programming has many, many
 advantages (see the end of this section for a popular one), but when first
 \emph{learning} a programming pattern, it is often useful to ``code it
@@ -1804,12 +1864,12 @@ int[] add(int[] arr1, int[] arr2) {
   return ans;
 }
 \end{verbatim}
-Coding up this algorithm in the ForkJoin framework is straightforward:
+Coding up this algorithm in the Task Parallel Library is straightforward:
 Have the main thread create the {\tt ans} array and pass it before starting the
 parallel divide-and-conquer.  Each thread object will have a reference
 to this array but will assign to different portions of it.  Because
-there are no other results to combine, subclassing {\tt
-  RecursiveAction} is appropriate.  Using a sequential cut-off and
+there are no other results to combine, using {\tt
+  Task} is appropriate.  Using a sequential cut-off and
 creating only one new thread for each recursive subdivision of the
 problem remain important --- these ideas are more general than the
 particular programming pattern of a map or a reduce.
@@ -1827,7 +1887,7 @@ operations that have no side effects (since the order they occur
 is unspecified) and reduce operations that are associative (as we
 discussed).  As parallel programmers, it is often enough to ``write
 down the maps and reduces'' --- leaving it to systems like the
-ForkJoin framework or Hadoop to do the actual scheduling of the
+Task Parallel Library or Hadoop to do the actual scheduling of the
 parallelism.
 
 \subsection{Data Structures Besides Arrays}
