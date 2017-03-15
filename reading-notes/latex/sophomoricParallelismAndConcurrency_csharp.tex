@@ -2128,26 +2128,26 @@ other words, there is exponential available parallelism ($n$ grows
 exponentially faster than $\log n$), meaning with enough processors we
 can hope for an exponential speed-up over the sequential version.
 
-\subsubsection{The ForkJoin Framework Bound}
+\subsubsection{The Task Parallel Library Bound}
 
 Under some important assumptions we will describe below, algorithms
-written using the ForkJoin Framework, in particular the
+written using the Task Parallel Library, in particular the
 divide-and-conquer algorithms in these notes, have the following
 \emph{expected} time bound:
 
 \[ T_P\ \ \mbox{is}\ \ O(T_1/P + T_\infty) \]
 
-The bound is \emph{expected} because internally the framework uses
+The bound is \emph{expected} because internally the library uses
 randomness, so the bound can be violated from ``bad luck'' but such
 ``bad luck'' is exponentially unlikely, so it simply will not occur in
 practice.  This is exactly like the expected-time running-time
 guarantee for the sequential quicksort algorithm when a pivot element
 is chosen randomly. Because these notes do not describe the
-framework's implementation, we will not see where the randomness
+library's implementation, we will not see where the randomness
 arises.
 
 Notice that, ignoring constant factors, this bound is optimal:
-Given only $P$ processors, no framework can expect to do better than
+Given only $P$ processors, no code can expect to do better than
 $T_1/P$ or better than $T_\infty$.  For small $P$, the term $T_1/P$ is
 likely to be dominant and we can expect roughly linear speed-up.  As
 $P$ grows, the span becomes more relevant and the limit on the
@@ -2181,10 +2181,7 @@ subproblems do approximately the same amount of work.  Otherwise, if a
 thread with much-more-work-to-do is scheduled very late, other
 processors will sit idle waiting for this laggard to finish.  The
 second is that all the threads do a small but not tiny amount of work.
-This again helps with load balancing.  The documentation for the
-library suggests aiming for approximately 5000 basic computational
-steps (additions, method calls, etc.) and that the exact figure can be
-off by a factor of 10 or so without problem.  In other words, just avoid
+This again helps with load balancing. In other words, just avoid
 threads that do millions of operations as well as threads that do
 dozens.
 
@@ -2195,8 +2192,8 @@ run-time in terms of the provided bound.  The library's job is to give
 this bound while trying to maintain low constant-factor overheads.
 While this library is particularly good for \emph{this} style of
 programming, this basic division is common: application writers
-develop good algorithms and rely on some underlying \emph{thread
-  scheduler} to deliver reasonable performance.
+develop good algorithms and rely on some underlying \emph{thread scheduler}
+ to deliver reasonable performance.
 
 \subsection{Amdahl's Law}
 
