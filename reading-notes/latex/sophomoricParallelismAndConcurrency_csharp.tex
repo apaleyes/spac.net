@@ -2331,9 +2331,9 @@ is better than another.  The study of parallel algorithms
 could take an entire course, so we will pick just a few examples
 that represent some of the many key parallel-programming patterns.
 
-As is common when studying algorithms, we will not show full Java
+As is common when studying algorithms, we will not show full C\#
 implementations.  It should be clear at this point that one could code
-up the algorithms using the ForkJoin framework even if it may not be
+up the algorithms using the Task Parallel Library even if it may not be
 entirely easy to implement more sophisticated techniques.
 
 \subsection{Parallel-Prefix Sum}
@@ -2351,12 +2351,16 @@ input and output.
 A $\Theta(n)$ sequential solution is trivial:
 
 \begin{verbatim}
-int[] prefix_sum(int[] input) {
-  int[] output = new int[input.length];
-  output[0] = input[0];
-  for(int i=1; i < input.length; i++)
-    output[i] = output[i-1] + input[i];
-  return output;
+int[] PrefixSum(int[] input)
+{
+    int[] output = new int[input.Length];
+    output[0] = input[0];
+    for (int i = 1; i < input.Length; i++)
+    {
+        output[i] = output[i-1] + input[i];
+    }
+
+    return output;
 }
 \end{verbatim}
 
@@ -2553,18 +2557,27 @@ advance but never longer than {\tt input}.  A $\Theta(n)$ sequential
 solution using our ``greater than 10'' example is:
 
 \begin{verbatim}
-int[] greaterThanTen(int[] input) {
-   int count = 0;
-   for(int i=0; i < input.length; i++)
-     if(input[i] > 10)
-       count++;
-   int[] output = new int[count];
-   int index = 0;
-   for(int i=0; i < input.length; i++)
-     if(input[i] > 10)
-       output[index++] = input[i];
-   assert(index==count);
-   return output;
+int[] GreaterThenTen(int[] input)
+{
+    int count = 0;
+    for (int i = 0; i < input.Length; i++)
+    {
+        if (input[i] > 10)
+            count++;
+    }
+
+    int[] output = new int[count];
+    int index = 0;
+    for (int i = 0; i < input.Length; i++)
+    {
+        if (input[i] > 10)
+        {
+            output[index] = input[i];
+            index++;
+        }
+    }
+
+    return output;
 }
 \end{verbatim}
 Writing a generic version is really no more difficult; as in
