@@ -2828,17 +2828,16 @@ Section~\ref{sec:intro}, the line between parallel and concurrent
 programming is not clear, and many programs have aspects of both, but
 it is best at first to study each by itself.
 
-We will still have threads and shared memory.  We will use Java's
-built-in threads ({\tt java.lang.Thread}), not any classes in the
-ForkJoin Framework.  The ``shared resources'' will be memory locations
+We will still have threads and shared memory.  We will use C\#
+built-in threads ({\tt System.Threading.Thread}), not any classes in the
+Task Parallel Library.  The ``shared resources'' will be memory locations
 (fields of objects) used by more than one thread.  We will learn how
 to write code that provides properly synchronized access to shared
 resources even though it may not be known what order the threads may
 access the data.  In fact, multiple threads may \emph{try} to access
-and/or modify
-the data at the same time.  We will see why this cannot be allowed and
-how programmers must use programming-language features to avoid it.
-The features we will focus on involve \emph{mutual-exclusion locks},
+and/or modify the data at the same time. We will see why this cannot 
+be allowed and how programmers must use programming-language features to 
+avoid it. The features we will focus on involve \emph{mutual-exclusion locks},
 introduced in Section~\ref{sec:locks}.
 
 Here are some simple high-level examples of shared resources where we
