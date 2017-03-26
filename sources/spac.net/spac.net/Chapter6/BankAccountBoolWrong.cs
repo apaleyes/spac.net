@@ -8,13 +8,13 @@
             get { return _balance; }
             set { _balance = value; }
         }
-        private bool busy = false;
+        private bool _busy = false;
 
         public void Withdraw(int amount)
         {
-            while (busy)
+            while (_busy)
             { /* spin-wait */ }
-            busy = true;
+            _busy = true;
 
             if (amount > Balance)
             {
@@ -23,7 +23,7 @@
 
             Balance -= amount;
 
-            busy = false;
+            _busy = false;
         }
     }
 }

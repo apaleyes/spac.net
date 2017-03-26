@@ -66,6 +66,7 @@
     <Compile Include="Chapter6\BankAccountLockPseudocode.cs" />
     <Compile Include="Chapter6\BankAccountLockThis.cs" />
     <Compile Include="Chapter6\BankAccountMethodImplSync.cs" />
+    <Compile Include="Chapter6\BankAccountSecondCallWrong.cs" />
     <Compile Include="Chapter6\BankAccountSingleThread.cs" />
     <Compile Include="Chapter6\WithdrawTooLargeException.cs" />
     <Compile Include="Chapter7\ClassWithDataRaces.cs" />

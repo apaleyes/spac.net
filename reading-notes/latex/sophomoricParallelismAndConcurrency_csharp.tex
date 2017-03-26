@@ -2982,37 +2982,44 @@ we should prevent multiple threads from simultaneously performing
 operations on the same memory.  We will focus on showing
 \emph{possible interleavings} that produce the wrong answer.  However,
 the example also has \emph{data races}, which Section~\ref{sec:races}
-explains must be prevented.  We will show that using ``ordinary'' Java
+explains must be prevented.  We will show that using ``ordinary'' C\#
 features to try to prevent bad interleavings simply does not work.
 Instead, we will learn to use \emph{locks}, which are primitives
-provided by Java and other programming languages that provide what
+provided by C\# and other programming languages that provide what
 we need.  We will not learn how to \emph{implement} locks, since the
 techniques use low-level features more central to courses in operating
 systems and computer architecture.
 
 Consider this code for a {\tt BankAccount} class:
 \begin{verbatim}
-class BankAccount {
-  private int balance = 0;
-  int getBalance() { 
-    return balance; 
-  }
-  void setBalance(int x) { 
-    balance = x; 
-  } 
-  void withdraw(int amount) {
-    int b = getBalance();
-    if(amount > b)
-      throw new WithdrawTooLargeException();
-    setBalance(b - amount);
-  }
-  // ... other operations like deposit, etc.
+public class BankAccount
+{
+    // No auto property for consistency with
+    // further variations of the BankAccoutn class
+    private int _balance = 0;
+    public int Balance
+    {
+        get { return _balance; }
+        set { _balance = value; }
+    }
+
+    public void Withdraw(int amount)
+    {
+        if (amount > Balance)
+        {
+            throw new WithdrawTooLargeException();
+        }
+
+        Balance -= amount;
+    }
+
+    // ... other operations like deposit, etc.
 }
 \end{verbatim}
 
 This code is correct in a single-threaded program.  But suppose we
-have two threads, one calls {\tt x.withdraw(100)}, and the other calls
-{\tt y.withdraw(100)}.  The two threads could truly run at the same
+have two threads, one calls {\tt x.Withdraw(100)}, and the other calls
+{\tt y.Withdraw(100)}.  The two threads could truly run at the same
 time on different processors.  Or they may run one at a time, but the
 \emph{thread scheduler} might stop one thread and start the other at
 any point, switching between them any number of times.  Still, in many
@@ -3031,37 +3038,37 @@ scenarios it is not a problem for these two method calls to execute concurrently
   the thread and runs another one.
 \end{itemize}
 
-So let us consider two interleaved calls to {\tt withdraw} on the same
+So let us consider two interleaved calls to {\tt Withdraw} on the same
 bank account.  We will ``draw'' interleavings using a vertical
 timeline (earlier operations closer to the top) with each thread in a
 separate column.  There are many possible interleavings since even the
-operations in a helper method like {\tt getBalance} can be interleaved
+operations in a helper method like {\tt Balance} getter can be interleaved
 with operations in other threads.  But here is one incorrect
-interleaving.  Assume initially the {\tt balance} field holds 150 and
+interleaving.  Assume initially the {\tt \_balance} field holds 150 and
 both withdrawals are passed 100.  Remember that each thread executes a
 different method call with its own ``local'' variables {\tt b} and
-{\tt amount} but the calls to {\tt getBalance} and {\tt setBalance}
-are, we assume, reading/writing the one {\tt balance} field of the
+{\tt amount} but the calls to {\tt Balance} getter and setter 
+are, we assume, reading/writing the one {\tt \_balance} field of the
 \emph{same} object.
 
 \begin{verbatim}
 Thread 1                    Thread 2
 --------                    --------
-int b = getBalance();
-                            int b = getBalance();
-                            if(amount > b)
+int b = Balance;
+                            int b = Balance;
+                            if (amount > b)
                               throw new ...;
-                            setBalance(b - amount); // sets balance to 50
-if(amount > b) // no exception: b holds 150
+                            Balance = b - amount; // sets balance to 50
+if (amount > b) // no exception: b holds 150
   throw new ...;
-setBalance(b - amount);
+Balance = b - amount;
 \end{verbatim}
 
-If this interleaving occurs, the resulting {\tt balance} will be 50
-and no exception will be thrown.  But two {\tt withdraw} operations
+If this interleaving occurs, the resulting {\tt \_balance} will be 50
+and no exception will be thrown.  But two {\tt Withdraw} operations
 were supposed to occur --- there \emph{should} be an exception.
 Somehow we ``lost'' a withdraw, which would not make the bank happy.
-The problem is that {\tt balance} changed after Thread 1 retrieved it
+The problem is that {\tt \_balance} changed after Thread 1 retrieved it
 and stored it in {\tt b}.
 
 When first learning concurrent programming there is a natural but
@@ -3069,20 +3076,23 @@ almost-always WRONG attempted fix to this sort of problem.  It is tempting
 to rearrange or repeat operations to try to avoid using ``stale''
 information like the value in {\tt b}.  Here is a WRONG idea:
 \begin{verbatim}
-void withdraw(int amount) {
-  if(amount > getBalance())
-    throw new WithdrawTooLargeException();
-  // maybe balance changed, so get the new balance
-  setBalance(getBalance() - amount);
+public void Withdraw(int amount)
+{
+    if (amount > Balance)
+    {
+        throw new WithdrawTooLargeException();
+    }
+    // maybe balance changed, so get the new balance
+    Balance = Balance - amount;
 }
 \end{verbatim}
-The idea above is to call {\tt getBalance()} a second time to get any
+The idea above is to call {\tt Balance} a second time to get any
 updated values.  But there is \emph{still} the potential for an
-incorrect interleaving.  Just because {\tt setBalance(getBalance() -
-  amount)} is on one line in our source code does not mean it happens
-all at once.  This code still (a) calls {\tt getBalance}, then (b)
+incorrect interleaving.  Just because {\tt Balance = Balance -
+  amount} is on one line in our source code does not mean it happens
+all at once.  This code still (a) calls {\tt Balance} getter, then (b)
 subtracts {\tt amount} from the result, then (c) calls {\tt
-  setBalance}.  Moreover (a) and (c) may consist of multiple steps.
+  Balance} setter.  Moreover (a) and (c) may consist of multiple steps.
 In any case, the balance can change between (a) and (c), so we have
 not really accomplished anything except we might now produce a
 negative balance without raising an exception.
@@ -3092,7 +3102,7 @@ have concurrent access to shared memory that might change (i.e., the
 contents are \emph{mutable}), is to enforce \emph{mutual exclusion}:
 allow only one thread to access any particular account at a time.  The
 idea is that a thread will ``hang a do-not-disturb sign'' on the
-account before it starts an operation such as {\tt withdraw} and not
+account before it starts an operation such as {\tt Withdraw} and not
 remove the sign until it is finished.  Moreover, all threads will
 check for a ``do-not-disturb sign'' before trying to hang a sign and
 do an operation.  If such a sign is there, a thread will \emph{wait}
@@ -3111,53 +3121,60 @@ Here is one WRONG way to try to implement this idea.  You should never
 write code that tries to do this manually, but it is worth
 understanding why it is WRONG:
 \begin{verbatim}
-class BankAccount {
-  private int balance = 0;
-  private boolean busy = false;
-  void withdraw(int amount) {
-    while(busy) { /* spin-wait */ }
-    busy = true;
-    int b = getBalance();
-    if(amount > b)
-      throw new WithdrawTooLargeException();
-    setBalance(b - amount);
-    busy = false;
-  }
-  // deposit would spin on same boolean
+public class BankAccount
+{
+    private int _balance = 0;
+    private bool _busy = false;
+
+    public void Withdraw(int amount)
+    {
+        while (_busy)
+        { /* spin-wait */ }
+        _busy = true;
+
+        if (amount > Balance)
+        {
+            throw new WithdrawTooLargeException();
+        }
+
+        Balance -= amount;
+
+        _busy = false;
+    }
 }
 \end{verbatim}
-The idea is to use the {\tt busy} variable as our do-not-disturb
-sign.  All the other account operations would use the {\tt busy}
+The idea is to use the {\tt \_busy} variable as our do-not-disturb
+sign.  All the other account operations would use the {\tt \_busy}
 variable in the same way so that only one operation occurs at a time.
 The while-loop is perhaps a little inefficient since it would be
 better not to do useless work and instead be notified when the account
 is ``available'' for another operation, but that is not the real
-problem.  The {\tt busy} variable does not work, as this interleaving
+problem.  The {\tt \_busy} variable does not work, as this interleaving
 shows:
 \begin{verbatim}
 Thread 1                    Thread 2
 --------                    --------
-while(busy) { }
-                            while(busy) { }
-busy = true;
-                            busy = true;
-int b = getBalance();
-                            int b = getBalance();
+while(_busy) { }
+                            while(_busy) { }
+_busy = true;
+                            _busy = true;
+int b = Balance;
+                            int b = Balance;
                             if(amount > b)
                               throw new ...;
-                            setBalance(b - amount);
+                            Balance = b - amount;
 if(amount > b)
   throw new ...;
-setBalance(b - amount);
+Balance = b - amount;
 \end{verbatim}
 
-Essentially we have the same problem with {\tt busy} that we had with
-{\tt balance}: we can check that {\tt busy} is false, but then it
+Essentially we have the same problem with {\tt \_busy} that we had with
+{\tt \_balance}: we can check that {\tt \_busy} is false, but then it
 might get set to true before we have a chance to set it to true
 ourselves.  We need to check there is no do-not-disturb sign
 \emph{and} put our own sign up while \emph{we still know there is no
   sign}.  Hopefully you can see that using a variable to see if {\tt
-  busy} is busy is only going to push the problem somewhere else
+  \_busy} is busy is only going to push the problem somewhere else
 again.
 
 To get out of this conundrum, we rely on \emph{synchronization
