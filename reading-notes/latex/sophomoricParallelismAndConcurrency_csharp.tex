@@ -3629,26 +3629,26 @@ As Section~\ref{sec:data-races} explains, \emph{your programs must
 To better understand the difference between bad interleavings and data races,
 consider the final version of the {\tt BankAccount} class from
 Section~\ref{sec:basic-concurrency}.  If we accidentally omit the {\tt
-  synchronized} keyword from the {\tt withdraw} definition, the
+  MethodImpl(MethodImplOptions.Synchronized)} attribute from the {\tt Withdraw} definition, the
 program will have many bad interleavings, such as the first one we
 considered in Section~\ref{sec:basic-concurrency}.  But since {\tt
-  getBalance} and {\tt setBalance} are still {\tt synchronized}, there
+  Balance} is still decorated with {\tt MethodImpl(MethodImplOptions.Synchronized)}, there
 are no data races: Every piece of code that reads or writes {\tt
   balance} does so while holding the appropriate lock.  So there can
 never be a simultaneous read/write or write/write of this field.
 
-Now suppose {\tt withdraw} is {\tt synchronized} but we accidentally
-omitted {\tt synchronized} from {\tt getBalance}.  Data races now
-exist and the program is wrong regardless of what a bank account is
+Now suppose {\tt Withdraw} is synchronized but we accidentally
+omitted {\tt MethodImpl(MethodImplOptions.Synchronized)} from {\tt Balance} getter. 
+Data races now exist and the program is wrong regardless of what a bank account is
 supposed to do.  Figure~\ref{fig:data_race} depicts an example that
 meets our definition: two threads reading/writing the same field at
 potentially the same time.  (If both threads were writing, it would
 also be a data race.)  Interestingly, simultaneous calls to {\tt
-  getBalance} do \emph{not} cause a data race because simultaneous
-reads are not an error.  But if one thread calls {\tt getBalance} at
-the same time another thread calls {\tt setBalance}, then a data race
-occurs.  Even though {\tt setBalance} is synchronized, {\tt
-  getBalance} is not, so they might read and write {\tt balance} at
+  Balance} getter do \emph{not} cause a data race because simultaneous
+reads are not an error.  But if one thread calls {\tt Balance} at
+the same time another thread sets {\tt Balance}, then a data race
+occurs.  Even though {\tt Balance} setter is synchronized, {\tt
+  Balance} getter is not, so they might read and write {\tt \_balance} at
 the same time.  If your program has data races, it is infeasible to
 reason about what might happen.
 
@@ -3687,36 +3687,58 @@ point is to pick a small example so we can focus on the interleavings.
 Section~\ref{sec:condvars} discusses an alternative to throwing
 exceptions for this kind of structure.)
 \begin{verbatim}
-class Stack<E> {
-  private E[] array;
-  private int index = 0;
-  Stack(int size) {
-    array = (E[]) new Object[size];
-  }
-  synchronized boolean isEmpty() { 
-    return index==0; 
-  }
-  synchronized void push(E val) {
-     if(index==array.length)
-        throw new StackFullException();
-     array[index++] = val;
-  }
-  synchronized E pop() { 
-     if(index==0)
-        throw new StackEmptyException();
-     return array[--index];
-  }
+class Stack<E>
+{
+    private E[] array;
+    private int index = 0;
+
+    public Stack(int size)
+    {
+        array = new E[size];
+    }
+
+    public bool IsEmpty()
+    {
+        lock (this)
+        {
+            return index == 0;
+        }
+    }
+
+    public void Push(E val)
+    {
+        lock (this)
+        {
+            if (index == array.Length)
+            {
+                throw new StackFullException();
+            }
+            array[index++] = val;
+        }
+    }
+
+    public E Pop()
+    {
+        lock (this)
+        {
+            if (index == 0)
+            {
+                throw new StackEmptyException();
+            }
+            return array[--index];
+        }
+    }
 }
 \end{verbatim}
 The key invariant is that if {\tt index$>$0} then {\tt index-1} is the
 position of the most recently pushed item that has not yet been
-popped.  Both {\tt push} and {\tt pop} temporarily violate this
+popped.  Both {\tt Push} and {\tt Pop} temporarily violate this
 invariant because they need to modify {\tt index} and the contents of
-the array.  Even though this is done in one Java statement, it does
+the array.  Even though this is done in one C\# statement, it does
 not happen all at once.  By making each method synchronized, no thread
 using these operations can see an incorrect intermediate state.  It
 effectively ensures there is some global order of calls to {\tt
-  isEmpty}, {\tt push}, and {\tt pop}.  That order might differ across
+  IsEmpty}, {\tt Push}, and {\tt Pop}.  That order might differ across
 different executions because scheduling is nondeterministic, but the
 calls will not be interleaved.
 
@@ -3735,57 +3757,72 @@ after the constructor finishes executing.\footnote{This would not
 Now suppose we want to implement a new operation for our stack called
 {\tt peek} that returns the newest
 not-yet-popped element in the stack without popping it.  (This
-operation is also sometimes called {\tt top}.) A correct
+operation is also sometimes called {\tt Top}.) A correct
 implementation would be:
 \begin{verbatim}
-  synchronized E peek() {
-     if(index==0)
-        throw new StackEmptyException();
-     return array[index-1];
-  }
+public E Peek()
+{
+    lock (this)
+    {
+        if (index == 0)
+        {
+            throw new StackEmptyException();
+        }
+        return array[index - 1];
+    }
+}
 \end{verbatim}
-If we omit the {\tt synchronized} keyword, then this operation would
-cause data races with simultaneous {\tt push} or {\tt pop} operations.
+If we omit the lock, then this operation would
+cause data races with simultaneous {\tt Push} or {\tt Pop} operations.
 
 Consider instead this alternate also-correct implementation:
 \begin{verbatim}
-  synchronized E peek() {
-    E ans = pop();
-    push(ans);
-    return ans;
-  }
+public E Peek()
+{
+    lock (this)
+    {
+        E ans = Pop();
+        Push(ans);
+        return ans;
+    }
+}
 \end{verbatim}
 This version is perhaps worse style, but it is certainly correct.  It
 also has the advantage that this approach could be taken by a helper
 method outside the class where the first approach could not since {\tt
   array} and {\tt index} are private fields:
 \begin{verbatim}
-   class C {
-     static <E> E myPeekHelper(Stack<E> s) {
-        synchronized (s) {
-          E ans = s.pop();
-          s.push(ans);
-          return ans;
+class CorrectStackHelper
+{
+    static E PeekHelper<E>(Stack<E> s)
+    {
+        lock (s)
+        {
+            E ans = s.Pop();
+            s.Push(ans);
+            return ans;
         }
-     }
-   }
+    }
+}
 \end{verbatim}
 Notice this version could not be written if stacks used some private
 inaccessible lock.  Also notice that it relies on reentrant locks.
 However, we will consider instead this WRONG version where the helper
 method omits its own synchronized statement:
 \begin{verbatim}
-   class C {
-     static <E> E myPeekHelperWrong(Stack<E> s) {
-        E ans = s.pop();
-        s.push(ans);
+class WrongStackHelper
+{
+    static E PeekHelper<E>(Stack<E> s)
+    {
+        E ans = s.Pop();
+        s.Push(ans);
         return ans;
-     }
-   }
+    }
+}
 \end{verbatim}
-Notice this version has no data races because the {\tt pop} and {\tt
-  push} calls still acquire and release the appropriate lock.  Also
-  notice that {\tt myPeekHelperWrong} uses the stack operators exactly as
+Notice this version has no data races because the {\tt Pop} and {\tt
+  Push} calls still acquire and release the appropriate lock.  Also
+  notice that {\tt WrongStackHelper.PeekHelper<>} uses the stack operators exactly as
   it is supposed to.  Nonetheless, it is incorrect because
   a peek operation is not supposed to modify the stack.  While
   the \emph{overall result} is the same stack if the code runs without
@@ -3800,30 +3837,30 @@ demonstrate interleavings with other operations such that the stack
 does the wrong thing.  Writing out such interleavings is good practice
 for reasoning about concurrent code and helps determine what needs to
 be in a critical section.  As it turns out in our small example, 
-{\tt myPeekHelperWrong} causes race conditions with all other stack
+{\tt WrongStackHelper} causes race conditions with all other stack
 operations, including itself.
 
 \medskip
-\noindent\textbf{{\tt myPeekHelperWrong} and {\tt isEmpty}:}
+\noindent\textbf{{\tt WrongStackHelper} and {\tt IsEmpty}:}
 \medskip
 
-If a stack is not empty, then {\tt isEmpty} should return {\tt false}.
+If a stack is not empty, then {\tt IsEmpty} should return {\tt false}.
 Suppose two threads share a stack {\tt stk} that has one element in
-it.  If one thread calls {\tt isEmpty} and the other calls {\tt
-  myPeekHelperWrong}, the first thread can get the wrong result:
+it.  If one thread calls {\tt IsEmpty} and the other calls {\tt
+  WrongStackHelper.PeekHelper<>}, the first thread can get the wrong result:
 \begin{verbatim}
-Thread 1                    Thread 2 (calls myPeekHelperWrong)
+Thread 1                    Thread 2 (calls WrongStackHelper.PeekHelper<>)
 --------                    ----------------------------------
-                            E ans = stk.pop();
-boolean b = isEmpty();
-                            stk.push(ans);
+                            E ans = stk.Pop();
+boolean b = IsEmpty();
+                            stk.Push(ans);
                             return ans;
 \end{verbatim}
 Figure~\ref{fig:stack_states} shows how this interleaving produces the
-wrong result when the stack has one element.  Notice there is nothing wrong with what ``Java is doing'' here.  It is
-the programmer who wrote {\tt myPeekHelperWrong} such that it
+wrong result when the stack has one element.  Notice there is nothing wrong with what ``C\# is doing'' here.  It is
+the programmer who wrote {\tt WrongStackHelper.PeekHeper<>} such that it
 does not behave like a peek operation should.  Yet the code that gets the
-wrong answer is {\tt isEmpty}, which is another reason debugging
+wrong answer is {\tt IsEmpty}, which is another reason debugging
 concurrent programs is difficult.
 
 \begin{figure}
@@ -3837,72 +3874,72 @@ concurrent programs is difficult.
 
 
 \medskip
-\noindent\textbf{{\tt myPeekHelperWrong} and {\tt push}:}
+\noindent\textbf{{\tt WrongStackHelper} and {\tt Push}:}
 \medskip
 
 Another key property of stacks is that they return elements in
 last-in-first-out order.  But consider this interleaving, where one of
-Thread 1's {\tt push} operations happens in the middle of a concurrent
-call to {\tt myPeekHelperWrong}.
+Thread 1's {\tt Push} operations happens in the middle of a concurrent
+call to {\tt WrongStackHelper.PeekHelper<>}.
 \begin{verbatim}
-Thread 1                    Thread 2 (calls myPeekHelperWrong)
+Thread 1                    Thread 2 (calls WrongStackHelper.PeekHelper<>)
 --------                    ----------------------------------
-stk.push(x);
-                            E ans = stk.pop();
-stk.push(y);
-                            stk.push(ans);
+stk.Push(x);
+                            E ans = stk.Pop();
+stk.Push(y);
+                            stk.Push(ans);
                             return ans;
-E z = stk.pop();
+E z = stk.Pop();
 \end{verbatim}
 This interleaving has the effect of reordering the top two elements of
 the stack, so {\tt z} ends up holding the wrong value.
 
 \medskip
-\noindent\textbf{{\tt myPeekHelperWrong} and {\tt pop}:}
+\noindent\textbf{{\tt WrongStackHelper} and {\tt Pop}:}
 \medskip
 
-Similar to the previous example, a {\tt pop} operation (instead of a
-{\tt push}) that views the intermediate state of\\ {\tt
-  myPeekHelperWrong} can get the wrong (not last-in-first-out) answer:
+Similar to the previous example, a {\tt Pop} operation (instead of a
+{\tt Push}) that views the intermediate state of\\ {\tt
+  WrongStackHelper.PeekHelper<>} can get the wrong (not last-in-first-out) answer:
 \begin{verbatim}
-Thread 1                    Thread 2 (calls myPeekHelperWrong)
+Thread 1                    Thread 2 (calls WrongStackHelper.PeekHelper<>)
 --------                    ----------------------------------
-stk.push(x);
-stk.push(y);
-                            E ans = stk.pop();
-E z = stk.pop();
-                            stk.push(ans);
+stk.Push(x);
+stk.Push(y);
+                            E ans = stk.Pop();
+E z = stk.Pop();
+                            stk.Push(ans);
                             return ans;
 \end{verbatim}
 
 \medskip
-\noindent\textbf{{\tt myPeekHelperWrong} and {\tt myPeekHelperWrong}:}
+\noindent\textbf{{\tt WrongStackHelper} and {\tt WrongStackHelper}:}
 \medskip
 
-Finally, two threads both calling {\tt myPeekHelperWrong} causes race
+Finally, two threads both calling {\tt WrongStackHelper.PeekHelper<>} causes race
 conditions.  First, if {\tt stk} initially has one element, then
 a bad interleaving of the two calls could raise a {\tt
   StackEmptyException}, which should happen only when a stack has zero
 elements:
 \begin{verbatim}
-Thread 1                    Thread 2 (calls myPeekHelperWrong)
+Thread 1                    Thread 2 (calls WrongStackHelper.PeekHelper<>)
 --------                    ----------------------------------
-E ans = stk.pop();
-                            E ans = stk.pop(); // exception!
-stk.push(ans);
+E ans = stk.Pop();
+                            E ans = stk.Pop(); // exception!
+stk.Push(ans);
 return ans;
 \end{verbatim}
 Second, even if the stack has more than 1 element, we can extend the
 interleaving above to swap the order of the top two elements, which
-will cause later {\tt pop} operations to get the wrong answer.
+will cause later {\tt Pop} operations to get the wrong answer.
 \begin{verbatim}
-Thread 1                    Thread 2 (calls myPeekHelperWrong)
+Thread 1                    Thread 2 (calls WrongStackHelper.PeekHelper<>)
 --------                    ----------------------------------
-E ans = stk.pop();
-                            E ans = stk.pop();
-stk.push(ans);
+E ans = stk.Pop();
+                            E ans = stk.Pop();
+stk.Push(ans);
 return ans;
-                            stk.push(ans);
+                            stk.Push(ans);
                             return ans;
 \end{verbatim}
 
@@ -3911,11 +3948,11 @@ return ans;
 In general, bad interleavings can involve any number of threads using
 any operations.  The defense is to define large enough critical
 sections such that every possible thread schedule is correct.  Because
-{\tt push}, {\tt pop}, and {\tt isEmpty} are synchronized, we do not
+{\tt Push}, {\tt Pop}, and {\tt IsEmpty} are synchronized, we do not
 have to worry about calls to these methods being interleaved with each
-other.  To implement {\tt peek} correctly, the key insight is to
+other.  To implement {\tt Peek} correctly, the key insight is to
 realize that its intermediate state must not be visible and therefore
-we need its calls to {\tt pop} and {\tt push} to be part of \emph{one}
+we need its calls to {\tt Pop} and {\tt push} to be part of \emph{one}
 critical section instead of two separate critical sections.  As
 Section~\ref{sec:guidelines} discusses in more detail, making your
 critical sections large enough --- but not too large --- is an
@@ -3930,20 +3967,20 @@ avoided even if it ``seems like'' the program would be correct
 anyway.  
 
 For example, consider the {\tt Stack} implementation from Section~\ref{sec:interleavings}
-and suppose we omit synchronization from the {\tt isEmpty} method.
+and suppose we omit synchronization from the {\tt IsEmpty} method.
 Given everything we have discussed so far, doing so seems okay, if
-perhaps a bit risky.  After all, {\tt isEmpty} only reads the {\tt
+perhaps a bit risky.  After all, {\tt IsEmpty} only reads the {\tt
   index} field and since all the other critical sections write
-to {\tt index} at most once, it cannot be that {\tt isEmpty} observes an
+to {\tt index} at most once, it cannot be that {\tt IsEmpty} observes an
 intermediate state of another critical section: it would see {\tt
   index} either before or after it was updated --- and both
-possibilities remain when {\tt isEmpty} is properly synchronized.
+possibilities remain when {\tt IsEmpty} is properly synchronized.
 
 Nonetheless, omitting synchronization introduces data races with
-concurrent {\tt push} and {\tt pop} operations.  As soon as a Java
+concurrent {\tt Push} and {\tt Pop} operations.  As soon as a C\#
 program has a data race, it is extremely difficult to reason about
 what might happen.  (The author of these notes is genuinely unsure if
-the stack implementation is correct with {\tt isEmpty}
+the stack implementation is correct with {\tt IsEmpty}
 unsynchronized.)  In the C++11 standard, it is
 \emph{impossible} to do such reasoning: any program with a data race
 is as wrong as a program with an array-bounds violation.  So data
@@ -3958,36 +3995,40 @@ Let's consider an example that is simpler than the stack
 implementation but is so simple that we won't motivate why anyone
 would write code like this:
 \begin{verbatim}
-class C {
-  private int x = 0;
-  private int y = 0;
+class ClassWithDataRaces
+{
+    private int x = 0;
+    private int y = 0;
 
-  void f() {
-    x = 1; // line A
-    y = 1; // line B
-  }
-  void g() {
-    int a = y; // line C
-    int b = x; // line D
-    assert(b >= a);
-  }   
+    void F()
+    {
+        x = 1; // line A
+        y = 1; // line B
+    }
+
+    void G()
+    {
+        int a = x; // line C
+        int b = y; // line D
+        Debug.Assert(b >= a);
+    }
 }
 \end{verbatim}
-Notice {\tt f} and {\tt g} are not synchronized, leading to potential
+Notice {\tt F} and {\tt G} are not synchronized, leading to potential
 data races on fields {\tt x} and {\tt y}.  Therefore, it turns out the
-assertion in {\tt g} can fail.  But there is no interleaving of
+assertion in {\tt G} can fail.  But there is no interleaving of
 operations that justifies the assertion failure!  Here we prove that
 all interleavings are correct.  Then Section~\ref{sec:data-race-why}
 explains why the assertion can fail anyway.
 
 \begin{itemize}
-\item If a call to {\tt g} begins after at least one call to {\tt f}
+\item If a call to {\tt G} begins after at least one call to {\tt F}
   has ended, then {\tt x} and {\tt y} are both 1, so the assertion
   holds.
-\item Similarly, if a call to {\tt g} completes before any call to
-  {\tt f} begins, then {\tt x} and {\tt y} are both 0, so the
+\item Similarly, if a call to {\tt G} completes before any call to
+  {\tt F} begins, then {\tt x} and {\tt y} are both 0, so the
   assertion holds.
-\item So we need only concern ourselves with a call to {\tt g} that is
+\item So we need only concern ourselves with a call to {\tt G} that is
   interleaved with the first call to {\tt f}.  One way to proceed is
   to consider all possible interleavings of the lines marked A, B, C,
   and D and show the assertion holds under all of them.  Because A
@@ -4075,20 +4116,24 @@ To avoid data races, we need synchronization.  Given Java's locks,
 which we already know about, we could rewrite our example from
 Section~\ref{sec:data-race-example} as follows:
 \begin{verbatim}
-class C {
-  private int x = 0;
-  private int y = 0;
+class LockNoDataRaces
+{
+    private int x = 0;
+    private int y = 0;
 
-  void f() {
-    synchronized(this) { x = 1; } // line A
-    synchronized(this) { y = 1; } // line B
-  }
-  void g() {
-    int a, b;
-    synchronized(this) { a = y; } // line C
-    synchronized(this) { b = x; } // line D
-    assert(b >= a);
-  }   
+    void F()
+    {
+        lock (this) { x = 1; } // line A
+        lock (this) { y = 1; } // line B
+    }
+
+    void G()
+    {
+        int a, b;
+        lock (this) { a = x; } // line C
+        lock (this) { b = y; } // line D
+        Debug.Assert(b >= a);
+    }
 }
 \end{verbatim}
 In practice you might choose to implement each method with one
@@ -4107,25 +4152,29 @@ Instead of using locks, we can declare fields to be \emph{volatile}.
 By \emph{definition}, accesses to volatile fields \emph{do not count
   as data races}, so programmers using volatiles are still upholding
 their end of the grand compromise.  In fact, this definition is the
-reason that {\tt volatile} is a keyword in Java --- and the reason
+reason that {\tt volatile} is a keyword in C\# --- and the reason
 that until you study concurrency you will probably not run across it.
 Reading/writing a volatile field is less efficient than
 reading/writing a regular field, but more efficient than acquiring and
 releasing a lock.  For our example, the code looks like this:
 \begin{verbatim}
-class C {
-  private volatile int x = 0;
-  private volatile int y = 0;
+class VolatileNoDataRaces
+{
+    private volatile int x = 0;
+    private volatile int y = 0;
 
-  void f() {
-    x = 1; // line A
-    y = 1; // line B
-  }
-  void g() {
-    int a = y; // line C
-    int b = x; // line D
-    assert(b >= a);
-  }   
+    void F()
+    {
+        x = 1; // line A
+        y = 1; // line B
+    }
+
+    void G()
+    {
+        int a = x; // line C
+        int b = y; // line D
+        Debug.Assert(b >= a);
+    }
 }
 \end{verbatim}
 
@@ -4138,7 +4187,7 @@ lock, not a volatile field.
 \subsubsection{A More Likely Example}
 
 Since the previous discussion focused on a strange and unmotivated
-example (who would write code like {\tt f} and {\tt g}?), this section
+example (who would write code like {\tt F} and {\tt G}?), this section
 concludes with a data-race example that would arise naturally.
 
 Suppose we want to perform some expensive iterative computation, for
@@ -4149,32 +4198,35 @@ no longer needed (the video-game player has left the room with the
 monster).  We could have a boolean {\tt stop} field that the expensive
 computation checks periodically:
 \begin{verbatim}
-class MonsterDraw {
+class MonsterDraw
+{
   boolean stop = false;
-  void draw(...) {
-    while(!stop) {
+  void Draw(...)
+  {
+    while(!stop)
+    {
       ... keep making uglier ...
     }
     ...
   }
 }
 \end{verbatim}
-Then one thread would execute {\tt draw} and other threads could set
-{\tt stop} to true as necessary.  Notice that doing so introduces data
-races on the {\tt stop} field.  To be honest, even though this
-programming approach is wrong, with most Java implementations it will
+Then one thread would execute {\tt Draw} and other threads could set
+{\tt Stop} to true as necessary.  Notice that doing so introduces data
+races on the {\tt Stop} field.  To be honest, even though this
+programming approach is wrong, with most C\# implementations it will
 probably work.  But if it does not, it is the programmer's fault.
-Worse, the code might work for a long time, but when the Java
+Worse, the code might work for a long time, but when the C\#
 implementation changes or the compiler is run with different pieces of
 code, the idiom might stop working.  Most likely what would happen is
-the {\tt draw} method would never ``see'' that {\tt stop} was changed
+the {\tt Draw} method would never ``see'' that {\tt Stop} was changed
 and it would not terminate.
 
 The simplest ``fix'' to the code above is to declare {\tt stop}
 volatile.  However, many concurrency experts would consider this idiom
-poor style and would recommend learning more about Java's thread
+poor style and would recommend learning more about C\# thread
 library, which has built-in support for having one thread
-``interrupt'' another one.  Java's concurrency libraries are large
+``interrupt'' another one.  C\# concurrency libraries are large
 with built-in support for many coding patterns.  This is just one
 example of a pattern where using the existing libraries is ``the right
 thing to do,'' but we do not go into the details of the libraries in
