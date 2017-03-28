@@ -23,5 +23,8 @@ namespace spac.net.Chapter6
             }
             Balance = b - amount;
         }
+
+        // deposit and other operations
+        // would also use [MethodImpl(MethodImplOptions.Synchronized)]
     }
 }

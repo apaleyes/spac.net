@@ -47,13 +47,13 @@ namespace spac.net.Chapter6.Clients
 
     public class BankAccountLockObjectClient
     {
-        void doubleBalance(BankAccount acct)
+        void DoubleBalance(BankAccount acct)
         {
             acct.Balance = acct.Balance * 2;
         }
 
 #if false
-        void doubleBalance(BankAccount acct)
+        void DoubleBalance(BankAccount acct)
         {
             lock (acct.lk)
             {

@@ -3124,6 +3124,12 @@ understanding why it is WRONG:
 public class BankAccount
 {
     private int _balance = 0;
+    public int Balance
+    {
+        get { return _balance; }
+        set { _balance = value; }
+    }
+
     private bool _busy = false;
 
     public void Withdraw(int amount)
@@ -3212,31 +3218,42 @@ immediately while the other two will block.  When the ``winner'' calls
 {\tt release}, one other thread will get to hold the lock next, and so on.
 
 The description above is a general notion of what locks are.
-Section~\ref{sec:java-locks} will describe how to use the locks that
-are part of the Java language.  But using the general idea, we can
-write this PSEUDOCODE (Java does not actually have a {\tt Lock} class),
+Section~\ref{sec:csharp-locks} will describe how to use the locks that
+are part of the C\# language.  But using the general idea, we can
+write this PSEUDOCODE (C\# does not actually have a {\tt Lock} class),
 which is almost correct (i.e., still WRONG but close):
 \begin{verbatim}
-class BankAccount {
-  private int balance = 0;
-  private Lock lk = new Lock();
-  ...
-  void withdraw(int amount) {
-    lk.acquire(); /* may block */
-    int b = getBalance();
-    if(amount > b)
-      throw new WithdrawTooLargeException();
-    setBalance(b - amount);
-    lk.release(); 
-  }
-  // deposit would also acquire/release lk
+public class BankAccountLockPseudocode
+{
+    private int _balance = 0;
+    public int Balance
+    {
+        get { return _balance; }
+        set { _balance = value; }
+    }
+
+    private Lock lk = new Lock();
+
+    public void Withdraw(int amount)
+    {
+        lk.Acquire(); /* may block execution */
+        int b = Balance;
+        if (amount > b)
+        {
+            throw new WithdrawTooLargeException();
+        }
+        Balance = b;
+        lk.Release();
+    }
+
+    // deposit would also acquire/release lk
 }
 \end{verbatim}
-Though we show only the {\tt withdraw} operation, remember that all
-operations accessing {\tt balance} and whatever other fields the
+Though we show only the {\tt Withdraw} operation, remember that all
+operations accessing {\tt \_balance} and whatever other fields the
 account has should acquire and release the lock held in {\tt lk}.  That way,
 only one thread will perform any operation on a particular account at
-a time.  Interleaving a {\tt withdraw} and a {\tt deposit}, for
+a time.  Interleaving a {\tt Withdraw} and a {\tt Deposit}, for
 example, is incorrect.  If any operation does not use the lock
 correctly, it is like threads calling that operation are ignoring the
 do-not-disturb sign.  Because each account uses a different lock,
@@ -3256,37 +3273,37 @@ released.  This situation is like someone leaving the room
 through a window without removing the do-not-disturb sign from the door, so nobody
 else ever enters the room.
 
-A fix in this case would be to add {\tt lk.release} in the branch of
+A fix in this case would be to add {\tt lk.Release} in the branch of
 the if-statement before the throw-statement.  But more generally we
 have to worry about any exception that might be thrown, even while
 some other method called from within the critical section is executing
 or due to a null-pointer or array-bounds violation.  So more generally
 it would be safer to use a catch-statement or finally-statement to make
 sure the lock is always released.  Fortunately, as
-Section~\ref{sec:java-locks} describes, when we use Java's locks
+Section~\ref{sec:csharp-locks} describes, when we use C\# locks
 instead of our pseudocode locks, this will not be necessary.
 
-A second problem, also not an issue in Java, is more subtle.  Notice
-that {\tt withdraw} calls {\tt getBalance} and {\tt setBalance} while
-holding the lock for the account.  These methods might also be called
-directly from outside the bank-account implementation, assuming they
-are public.  Therefore, they should also acquire and release the lock
-before accessing the account's fields like {\tt balance}.  But if {\tt
-  withdraw} calls these helper methods \emph{while holding the lock},
+A second problem, also not an issue in C\#, is more subtle.  Notice
+that {\tt Withdraw} calls {\tt Balance} while
+holding the lock for the account.  This property might also be called
+directly from outside the bank-account implementation, assuming it is 
+public.  Therefore, it should also acquire and release the lock
+before accessing the account's field {\tt \_balance}.  But if {\tt
+  Withdraw} calls this property \emph{while holding the lock},
 then as we have described it, the thread would block forever ---
 waiting for ``some thread'' to release the lock when in fact the
 thread itself already holds the lock.
 
 There are two solutions to this problem.  The first solution is more
 difficult for programmers: we can define two versions of {\tt
-  getBalance} and {\tt setBalance}.  One would acquire the lock and
+  Balance}.  One would acquire the lock and
 one would assume the caller already holds it.  The latter could be
 private, perhaps, though there are any number of ways to manually keep
 track in the programmer's head (and hopefully documentation!) what
 locks the program holds where.  
 
-The second solution is to change our definition of the {\tt acquire}
-and {\tt release} operations so that it is okay for a thread to
+The second solution is to change our definition of the {\tt Acquire}
+and {\tt Release} operations so that it is okay for a thread to
 (re)acquire a lock it already holds.  Locks that support this are
 called \emph{reentrant locks}.  (The name fits well with our
 do-not-disturb analogy.) To define reentrant locks, we need to adjust
@@ -3308,30 +3325,31 @@ In other words, a lock is released when the number of {\tt release}
 operations by the holding thread equals the number of {\tt acquire}
 operations.
 
-\subsection{Locks in Java}
-\label{sec:java-locks}
+\subsection{Locks in C\#}
+\label{sec:csharp-locks}
 
-The Java language has built-in support for locks that is different
+The C\# language has built-in support for locks that is different
 than the pseudocode in the previous section, but easy to understand in
 terms of what we have already discussed.  The main addition to the
-language is a synchronized statement, which looks like this:
+language is a {\tt lock} statement, which looks like this:
 \begin{verbatim}
-  synchronized (expression) {
+  lock (expression)
+  {
      statements
   }
 \end{verbatim}
-Here, {\tt synchronized} is a keyword.  Basically, the \emph{syntax}
+Here, {\tt lock} is a keyword.  Basically, the \emph{syntax}
 is just like a while-loop using a different keyword, but this is
 \emph{not} a loop.  Instead it works as follows:
 \begin{enumerate}
 \item The {\tt expression} is evaluated.  It must produce (a reference
   to) an object --- not {\tt null} or a number.  This object is
-  treated as a lock.  In Java, \emph{every object is a lock} that any
+  treated as a lock.  In C\#, \emph{every object is a lock} that any
   thread can acquire or release.  This decision is a bit strange, but
   is convenient in an object-oriented language as we will see.
-\item The synchronized statement acquires the lock, i.e., the object
+\item The {\tt lock} statement acquires the lock, i.e., the object
   that is the result of step (1).  Naturally, this may block until the
-  lock is available.  Locks are reentrant in Java, so the statement
+  lock is available.  Locks are reentrant in C\#, so the statement
   will not block if the executing thread already holds it.
 \item After the lock is successfully acquired, the {\tt statements}
   are executed.
@@ -3340,51 +3358,64 @@ is just like a while-loop using a different keyword, but this is
   when the program ``jumps out of the statement'' via an exception, a
   {\tt return}, a {\tt break}, or a {\tt continue}.
 \end{enumerate}
-Step (4) is the other unusual thing about Java locks, but it is quite
+Step (4) is the other unusual thing about C\# locks, but it is quite
 convenient.  Instead of having an explicit release statement, it
 happens implicitly at the ending {\tt \}}.  More importantly, the
 lock is still released if an exception causes the thread to not 
 finish the {\tt statements}.  Naturally, {\tt statements} can contain
-arbitrary Java code: method calls, loops, other synchronized
+arbitrary C\# code: method calls, loops, other synchronized
 statements, etc.  The only shortcoming is that there is no way to
 release the lock \emph{before} reaching the ending {\tt \}}, but it
 is rare that you want to do so.
 
 Here is an implementation of our bank-account class using synchronized
-statements as you might expect.  However, this example is UNUSUAL
-STYLE and is NOT ENCOURAGED.  The key thing to notice is that any
+statements as you might expect. The key thing to notice is that any
 object can serve as a lock, so for the lock we simply create an
-instance of {\tt Object}, the built-in class that is a superclass of
-every other class.
+instance of the built-in {\tt Object} class.
 \begin{verbatim}
-class BankAccount {
-  private int balance = 0;
-  private Object lk = new Object();
-  int getBalance() { 
-    synchronized (lk) { 
-      return balance; 
-    } 
-  }
-  void setBalance(int x) { 
-    synchronized (lk) { 
-      balance = x; 
-    } 
-  } 
-  void withdraw(int amount) {
-    synchronized (lk) {
-      int b = getBalance();
-      if(amount > b)
-        throw new WithdrawTooLargeException();
-      setBalance(b - amount);
-    } 
-  }
-  // deposit and other operations would also use synchronized(lk)
+public class BankAccountLockObject
+{
+    private readonly object lk = new object();
+
+    private int _balance = 0;
+    public int Balance
+    {
+        get
+        {
+            lock (lk)
+            {
+                return _balance;
+            }
+        }
+        set
+        {
+            lock (lk)
+            {
+                _balance = value;
+            }
+        }
+    }
+
+    public void Withdraw(int amount)
+    {
+        lock (lk)
+        {
+            int b = Balance;
+            if (amount > b)
+            {
+                throw new WithdrawTooLargeException();
+            }
+            Balance = b - amount;
+        }
+    }
+
+    // deposit and other operations
+    // would also use lock (lk)
 }
 \end{verbatim}
-Because locks are reentrant, it is no problem for {\tt withdraw} to
-call {\tt setBalance} and {\tt getBalance}.  Because locks are
-automatically released, the exception in {\tt withdraw} is not a
-problem.
+Because locks are reentrant, it is no problem for {\tt Withdraw} to
+call {\tt Balance}.  Because locks are automatically released, 
+the exception in {\tt Withdraw} is not a problem.
 
 While it may seem naturally good style to make {\tt lk} a {\tt
   private} field since it is an implementation detail (clients need
@@ -3394,96 +3425,125 @@ critical sections involving bank accounts. For example, suppose a
 client wants to double an account's balance.  In a sequential program,
 another class could include this correct method:
 \begin{verbatim}
-  void doubleBalance(BankAccount acct) {
-    acct.setBalance(acct.getBalance()*2);
-  }
+void DoubleBalance(BankAccount acct)
+{
+    acct.Balance = acct.Balance * 2;
+}
 \end{verbatim}
 But this code is subject to a bad interleaving: the balance might be
-changed by another thread after the call to {\tt getBalance}.  If {\tt
+changed by another thread after the call to {\tt Balance}.  If {\tt
   lk} were instead {\tt public}, then clients could use it --- and the
 convenience of reentrant locks --- to write a proper critical
 section:
 \begin{verbatim}
-  void doubleBalance(BankAccount acct) {
-    synchronized(acct.lk) {
-      acct.setBalance(acct.getBalance()*2);
+void DoubleBalance(BankAccount acct)
+{
+    lock (acct.lk)
+    {
+        acct.Balance = acct.Balance * 2;
     }
-  }
+}
 \end{verbatim}
 
 There is a simpler and more idiomatic way, however: Why create a new
 {\tt Object} and store it in a {\tt public} field?  Remember any
-object can serve as a lock, so it is more convenient, and the custom
-in Java, to use the instance of {\tt BankAccount} itself (or in
+object can serve as a lock, so it is more convenient 
+to use the instance of {\tt BankAccount} itself (or in
 general, the object that has the fields relevant to the
 synchronization).  So we would remove the {\tt lk} field entirely like
 this (there is one more slightly shorter version coming):
 \begin{verbatim}
-class BankAccount {
-  private int balance = 0;
-  int getBalance() { 
-    synchronized (this) { 
-      return balance; 
-    } 
-  }
-  void setBalance(int x) { 
-    synchronized (this) { 
-      balance = x; 
-    } 
-  } 
-  void withdraw(int amount) {
-    synchronized (this) {
-      int b = getBalance();
-      if(amount > b)
-        throw new WithdrawTooLargeException();
-      setBalance(b - amount);
-    } 
-  }
-  // deposit and other operations would also use synchronized(this)
+public class BankAccountLockThis
+{
+    private int _balance = 0;
+    public int Balance
+    {
+        get
+        {
+            lock (this)
+            {
+                return _balance;
+            }
+        }
+        set
+        {
+            lock (this)
+            {
+                _balance = value;
+            }
+        }
+    }
+
+    public void Withdraw(int amount)
+    {
+        lock (this)
+        {
+            int b = Balance;
+            if (amount > b)
+            {
+                throw new WithdrawTooLargeException();
+            }
+            Balance = b - amount;
+        }
+    }
+
+    // deposit and other operations
+    // would also use lock (this)
 }
 \end{verbatim}
 All we are doing differently is using the object itself (referred to
 by the keyword {\tt this}) rather than a different object.  Of course,
 all methods need to agree on what lock they are using.  Then a client
-could write the {\tt doubleBalance} method like this:
+could write the {\tt DoubleBalance} method like this:
 \begin{verbatim}
-  void doubleBalance(BankAccount acct) {
-    synchronized(acct) {
-      acct.setBalance(acct.getBalance()*2);
+void DoubleBalance(BankAccount acct)
+{
+    lock (acct)
+    {
+        acct.Balance = acct.Balance * 2;
     }
-  }
-\end{verbatim}
-In this way, {\tt doubleBalance} acquires the same lock that the
-methods of {\tt acct} do, ensuring mutual exclusion.  That is, {\tt
-  doubleBalance} will not be interleaved with other operations on the
-same account.
-
-Because this idiom is so common, Java has one more shortcut to save
-you a few keystrokes.  When an entire method body should be
-synchronized on {\tt this}, we can omit the synchronized statement and
-instead put the {\tt synchronized} keyword in the method declaration
-before the return type.  This is just a shorter way of saying the same
-thing.  So our FINAL VERSION looks like this:
-\begin{verbatim}
-class BankAccount {
-  private int balance = 0;
-  synchronized int getBalance() { 
-    return balance; 
-  }
-  synchronized void setBalance(int x) { 
-    balance = x; 
-  } 
-  synchronized void withdraw(int amount) {
-    int b = getBalance();
-    if(amount > b)
-      throw new WithdrawTooLargeException();
-    setBalance(b - amount);
-  }
-  // deposit and other operations would also be declared synchronized
 }
 \end{verbatim}
-There is no change to the {\tt doubleBalance} method.  It must still
-use a synchronized statement to acquire {\tt acct}.
+In this way, {\tt DoubleBalance} acquires the same lock that the
+methods of {\tt acct} do, ensuring mutual exclusion.  That is, {\tt
+  DoubleBalance} will not be interleaved with other operations on the
+same account.
+
+Because this idiom is so common, C\# has one more shortcut to save
+you a few keystrokes.  When an entire method body should be
+synchronized on {\tt this}, we can omit the {\tt lock} statement and
+instead decorate a method or a property with the attribute 
+{\tt MethodImpl(MethodImplOptions.Synchronized)}.  This is just a shorter 
+way of saying the same thing.  So our FINAL VERSION looks like this:
+\begin{verbatim}
+public class BankAccountMethodImplSync
+{
+    private int _balance = 0;
+    public int Balance
+    {
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        get { return _balance; }
+        [MethodImpl(MethodImplOptions.Synchronized)]
+        set { _balance = value; }
+    }
+
+    [MethodImpl(MethodImplOptions.Synchronized)]
+    public void Withdraw(int amount)
+    {
+        int b = Balance;
+        if (amount > b)
+        {
+            throw new WithdrawTooLargeException();
+        }
+        Balance = b - amount;
+    }
+    
+    // deposit and other operations
+    // would also use [MethodImpl(MethodImplOptions.Synchronized)]
+}
+\end{verbatim}
+There is no change to the {\tt DoubleBalance} method.  It must still
+use a {\tt lock} statement to acquire {\tt acct}.
 
 While we have built up to our final version in small steps, in
 practice it is common to have classes defining shared resources
@@ -3492,38 +3552,38 @@ provided that critical sections only access the state of a single
 object.  For some other cases, see the guidelines in
 Section~\ref{sec:guidelines}.
 
-Remember that each Java object represents a \emph{different} lock.  If
+Remember that each C\# object represents a \emph{different} lock.  If
 two threads use synchronized statements to acquire different locks,
 the bodies of the synchronized statements can still execute
 simultaneously.  Here is a subtle BUG emphasizing this point, assuming
 {\tt arr} is an array of objects and {\tt i} is an {\tt int}:
 \begin{verbatim}
-void someMethod() {
-  synchronized(arr[i]) {
-     if(someCondition()) {
-       arr[i] = new Foo();
-     }
-     // some more statements using arr[i]
-  }
+void SomeMethod()
+{
+	lock(arr[i])
+	{
+		if(SomeCondition()) {
+		    arr[i] = new Foo();
+		}
+		// some more statements using arr[i]
+	}
 }
 \end{verbatim}
-If one thread executes this method and {\tt someCondition()} evaluates
+If one thread executes this method and {\tt SomeCondition()} evaluates
 to {\tt true}, then it updates {\tt arr[i]} to hold a different
-object, so another thread executing {\tt someMethod()} could acquire
-this different lock and also execute the synchronized statement at the same
+object, so another thread executing {\tt SomeMethod()} could acquire
+this different lock and also execute the {\tt lock} statement at the same
 time as the first thread.
 
-Finally, note that the synchronized statement is far from the only
-support for concurrent programming in Java.  In
-Section~\ref{sec:condvars} we will show Java's support for condition
-variables.  The package {\tt java.util.concurrent} also has many
+Finally, note that the {\tt lock} statement is far from the only
+support for concurrent programming in C\#.  In
+Section~\ref{sec:condvars} we will show C\# support for condition
+variables.  The namespace {\tt System.Collections.Concurrent} also has many
 library classes useful for different tasks.  For example, you almost
-surely should not implement your own concurrent hashtable or queue
+surely should not implement your own concurrent dictionary or queue
 since carefully optimized correct implementations are already
 provided.  In addition to concurrent data structures, the standard
-library also has many features for controlling threads.  A standard
-reference (an entire book!) is, ``Java Concurrency in Practice'' by
-Brian Goetz et al.
+library also has many features for controlling threads.
 
 \section{Race Conditions: Bad Interleavings and Data Races}
 \label{sec:races}

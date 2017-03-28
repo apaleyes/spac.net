@@ -45,7 +45,7 @@ namespace spac.net.Chapter6.Clients
 
     public class BankAccountLockThisClient
     {
-        void doubleBalance(BankAccount acct)
+        void DoubleBalance(BankAccount acct)
         {
             lock (acct)
             {
