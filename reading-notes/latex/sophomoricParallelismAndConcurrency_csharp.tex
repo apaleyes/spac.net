@@ -4212,14 +4212,14 @@ class MonsterDraw
 }
 \end{verbatim}
 Then one thread would execute {\tt Draw} and other threads could set
-{\tt Stop} to true as necessary.  Notice that doing so introduces data
-races on the {\tt Stop} field.  To be honest, even though this
+{\tt stop} to true as necessary.  Notice that doing so introduces data
+races on the {\tt stop} field.  To be honest, even though this
 programming approach is wrong, with most C\# implementations it will
 probably work.  But if it does not, it is the programmer's fault.
 Worse, the code might work for a long time, but when the C\#
 implementation changes or the compiler is run with different pieces of
 code, the idiom might stop working.  Most likely what would happen is
-the {\tt Draw} method would never ``see'' that {\tt Stop} was changed
+the {\tt Draw} method would never ``see'' that {\tt stop} was changed
 and it would not terminate.
 
 The simplest ``fix'' to the code above is to declare {\tt stop}
