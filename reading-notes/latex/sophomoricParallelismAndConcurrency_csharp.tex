@@ -4200,15 +4200,15 @@ computation checks periodically:
 \begin{verbatim}
 class MonsterDraw
 {
-  boolean stop = false;
-  void Draw(...)
-  {
-    while(!stop)
+    bool stop = false;
+    void Draw(...)
     {
-      ... keep making uglier ...
+        while(!stop)
+        {
+          ... keep making uglier ...
+        }
+        ...
     }
-    ...
-  }
 }
 \end{verbatim}
 Then one thread would execute {\tt Draw} and other threads could set
@@ -4224,8 +4224,8 @@ and it would not terminate.
 
 The simplest ``fix'' to the code above is to declare {\tt stop}
 volatile.  However, many concurrency experts would consider this idiom
-poor style and would recommend learning more about C\# thread
-library, which has built-in support for having one thread
+poor style and would recommend learning more about C\# thread library, 
+which has built-in support for having one thread
 ``interrupt'' another one.  C\# concurrency libraries are large
 with built-in support for many coding patterns.  This is just one
 example of a pattern where using the existing libraries is ``the right
@@ -4332,18 +4332,23 @@ Let's consider a small example that demonstrates some of the issues.
 Suppose we have a dictionary such as a hashtable that maps student ids
 to names where the name class is represented like this:
 \begin{verbatim}
-class Name {
-  public String first;
-  public String middle;
-  public String last;
-  public Name(String f, String m, String l) {
-    first  = f;
-    middle = m;
-    last   = l;
-  }
-  public String toString() {
-    return first + " " + middle + " " + last;
-  }
+class Name
+{
+    public string First;
+    public string Middle;
+    public string Last;
+
+    public Name(string f, string m, string l)
+    {
+        First = f;
+        Middle = m;
+        Last = l;
+    }
+
+    public override string ToString()
+    {
+        return First + " " + Middle + " " + Last;
+    }
 }
 \end{verbatim}
 Suppose we want to write a method that looks up a student by id in 
@@ -4351,23 +4356,23 @@ some table and returns the name, but using a middle initial instead of
 the full middle name.  The following direct solution is probably the
 BEST STYLE:
 \begin{verbatim}
-   Name n = table.lookup(id);
-   return n.first + " " + n.middle.charAt(0) + " " + n.last;
+    Name n = table.Lookup(id);
+    return n.First + " " + n.Middle[0] + " " + n.Last;
 \end{verbatim}
 Notice that the computation is almost the same as that already done by
-{\tt toString}.  So if the computation were more complicated than just
+{\tt ToString}.  So if the computation were more complicated than just
 a few string concatenations, it would be tempting and arguably
-reasonable to try to reuse the {\tt toString} method.  This approach
+reasonable to try to reuse the {\tt ToString} method.  This approach
 is a BAD IDEA:
 \begin{verbatim}
-   Name n = table.lookup(id);
-   n.middle = n.middle.substring(0,1);
-   return n.toString();
+    Name n = table.Lookup(id);
+    n.Middle = n.Middle.Substring(0, 1);
+    return n.ToString();
 \end{verbatim}
 While this code produces the right answer, it has the
-\emph{side-effect} of changing the name's {\tt middle} field.  Worse,
+\emph{side-effect} of changing the name's {\tt Middle} field.  Worse,
 the Name object is \emph{still in the table}.  Actually, this depends on how the
-{\tt lookup} method is implemented.  We assume here it returns a
+{\tt Lookup} method is implemented.  We assume here it returns a
 reference to the object in the table, rather than creating a new 
   Name object.  If Name objects are not mutated, then returning an
   alias is simpler and more efficient.  Under this assumption, the
@@ -4377,12 +4382,12 @@ reference to the object in the table, rather than creating a new
 In a SINGLE-THREADED PROGRAM, the following workaround is correct but
 POOR STYLE:
 \begin{verbatim}
-   Name n = table.lookup(id);
-   String m = n.middle;
-   n.middle = m.substring(0,1);
-   String ans = n.toString();
-   n.middle = m;
-   return ans;
+    Name n = table.Lookup(id);
+    String m = n.Middle;
+    n.Middle = m.Substring(0, 1);
+    String ans = n.ToString();
+    n.Middle = m;
+    return ans;
 \end{verbatim}
 Again, this is total overkill for our example, but the idea makes
 sense: undo the side effect before returning.
@@ -4390,7 +4395,7 @@ sense: undo the side effect before returning.
 But if the table is shared among threads, the APPROACH ABOVE IS WRONG.
 Simultaneous calls using the same ID would have data races.  Even if
 there were no data races, there would be interleavings where other
-operations might see the intermediate state where the {\tt middle}
+operations might see the intermediate state where the {\tt Middle}
 field held only the initial.  The point is that for shared memory, you
 cannot perform side effects and undo them later: later is too late in the
 presence of concurrent operations.  This is a major reason that the
@@ -4399,9 +4404,9 @@ functional-programming paradigm is even more useful with concurrency.
 The solution is to make a copy of the object and, if necessary, mutate the
 (thread-local) copy.  So this WORKS:
 \begin{verbatim}
-   Name n1 = table.lookup(id);
-   Name n2 = new Name(n1.first, n1.middle.substring(0,1), n1.last);
-   return n2.toString();
+    Name n1 = table.Lookup(id);
+    Name n2 = new Name(n1.First, n1.Middle.Substring(0, 1), n1.Last);
+    return n2.ToString();
 \end{verbatim}
 
 Note that it is no problem for multiple threads to lookup up the same
@@ -4437,8 +4442,8 @@ examples of wrong programs that have no data races).
   is always held when memory location $m$ is read or written, then we
   say that $l$ \emph{guards} the location $m$.  It is extremely good
   practice to document (e.g., via comments) for each field needing
-  synchronization what lock guards that location.  For example, the
-  most common situation in Java would be, ``{\tt this} guards all
+  synchronization what lock guards that location.  For example, one
+  possible situation would be, ``{\tt this} guards all
   fields of instances of the class.''
 
   Note that each location would have exactly one guard, but one lock can
@@ -4542,16 +4547,17 @@ If you make your critical sections too short, you are introducing more
 possible interleavings and potentially incorrect race conditions.  For
 example, compare:
 \begin{verbatim}
-synchronized(lk) { /* do first thing */ }
+lock (lk) { /* do first thing */ }
 /* do second thing */
-synchronized(lk) { /* do third thing */ }
+lock (lk) { /* do third thing */ }
 \end{verbatim}
 with:
 \begin{verbatim}
-synchronized(lk) {
-  /* do first thing */
-  /* do second thing */
-  /* do third thing */
+lock (lk)
+{
+    /* do first thing */
+    /* do second thing */
+    /* do third thing */
 }
 \end{verbatim}
 The first version has smaller critical sections.  Smaller critical
@@ -4578,11 +4584,12 @@ case that it is necessary.  For example, consider this large critical
 section that replaces a table entry by performing some computation on
 its old value:
 \begin{verbatim}
-synchronized(lk) {
-  v1 = table.lookup(k);
-  v2 = expensive(v1);
-  table.remove(k);
-  table.insert(k,v2);
+lock (lk)
+{
+    v1 = table.Lookup(k);
+    v2 = Expensive(v1);
+    table.Remove(k);
+    table.Insert(k, v2);
 }
 \end{verbatim}
 We assume the program is incorrect if this critical section is any
@@ -4590,52 +4597,58 @@ smaller: We need other threads to see either the old value in the
 table or the new value.  And we need to compute {\tt v2} using the
 current {\tt v1}.  So this variation would be WRONG:
 \begin{verbatim}
-synchronized(lk) {
-  v1 = table.lookup(k);
+lock (lk)
+{
+    v1 = table.Lookup(k);
 }
-v2 = expensive(v1);
-synchronized(lk) {
-  table.remove(k);
-  table.insert(k,v2);
+v2 = Expensive(v1);
+lock (lk)
+{
+    table.Remove(k);
+    table.Insert(k, v2);
 }
 \end{verbatim}
 If another thread updated the table to map {\tt k} to some {\tt v3}
-while this thread was executing {\tt expensive(v1)}, then we would not
+while this thread was executing {\tt Expensive(v1)}, then we would not
 be performing the correct computation.  In this case, either the final
 value in the table should be {\tt v3} (if that thread ran second) or
-the result of {\tt expensive(v3)} (if that thread ran first), but
+the result of {\tt Expensive(v3)} (if that thread ran first), but
 never {\tt v2}.
 
 However, this more complicated version would WORK in this situation,
 under the CAVEAT described below:
 \begin{verbatim}
-boolean loop_done = false;
-while(!loop_done) {
-  synchronized(lk) {
-    v1 = table.lookup(k);
-  } 
-  v2 = expensive(v1);
-  synchronized(lk) {
-    if(table.lookup(k)==v1) {
-      loop_done = true;
-      table.remove(k);
-      table.insert(k,v2);
+bool loop_done = false;
+while (!loop_done)
+{
+    lock (lk)
+    {
+        v1 = table.Lookup(k);
     }
-  }
+    v2 = Expensive(v1);
+    lock (lk)
+    {
+        if (table.Lookup(k) == v1)
+        {
+            loop_done = true;
+            table.Remove(k);
+            table.Insert(k, v2);
+        }
+    }
 }
 \end{verbatim}
 The essence of the trick is the second critical section.  If {\tt
-  table.lookup(k)==v1}, then we know what {\tt expensive(v1)} would
+  table.Lookup(k) == v1}, then we know what {\tt Expensive(v1)} would
   compute, having already computed it!  So the critical section is
   small, but does the same thing as our original large critical
-  section.  But if {\tt table.lookup(k)!=v1}, then our precomputation
+  section.  But if {\tt table.Lookup(k) != v1}, then our precomputation
   did useless work and the while-loop starts over.  If we expect
   concurrent updates to be rare, then this approach is a ``good
   performance bet'' while still correct in all cases.
   
   As promised, there is an important caveat to mention.  This approach
   does \emph{not} ensure the table entry for key {\tt k} was
-  unmodified during the call to {\tt expensive}.  There could have
+  unmodified during the call to {\tt Expensive}.  There could have
   been any number of concurrent updates, removals, insertions, etc.
   with this key.  All we know is that when the second critical section
   executes, the key {\tt k} has value {\tt v1}.  Maybe it was
@@ -4691,15 +4704,15 @@ changing.
 
 Widely used libraries for popular programming languages already
 contain many reusable data structures that you should use whenever
-they meet your needs.  For example, there is little reason in Java to
-implement your own hashtable since the {\tt Hashtable} class in the
+they meet your needs.  For example, there is little reason in C\# to
+implement your own dictionary since the {\tt Dictionary} class in the
 standard library has been carefully tuned and tested.  For concurrent
 programming, the advice to ``reuse existing libraries'' is even more
 important, precisely because writing, debugging, and testing
 concurrent code is so difficult.  Experts who devote their lives to
 concurrent programming can write tricky fine-grained locking code once
 and the rest of us can benefit.  For example, the {\tt
-  ConcurrentHashMap} class implements a hashtable that can be safely
+  ConcurrentDictionary} class implements a dictionary that can be safely
 used by multiple threads with very little contention.  It
 uses some techniques more advanced than discussed in these notes, but
 clients to the library have such trickiness hidden from them.  For
@@ -4715,7 +4728,7 @@ contention).
 
 Moreover, standard libraries do not typically handle all the necessary
 synchronization for an application.  For example, {\tt
-  ConcurrentHashMap} does not support atomically removing one element
+  ConcurrentDictionary} does not support atomically removing one element
 and inserting two others.  If your application needs to do that, then
 you will need to implement your own locking protocol to synchronize
 access to a shared data structure.  Understanding race conditions is
