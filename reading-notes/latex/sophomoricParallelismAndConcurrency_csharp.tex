@@ -5066,19 +5066,19 @@ Third, just like regular locks, a reader/writer lock may or may not
 be reentrant.  Aside from the case of upgrading, this is an orthogonal
 issue.
 
-Java's synchronized statement supports only regular locks, not
-reader/writer locks.  But Java's standard library has reader/writer
-locks, such as the class {\tt ReentrantReadWriteLock} in the {\tt
-  java.util.concurrent.locks} package.  The interface is slightly
-different than with synchronized statements (you have to be careful to
-release the lock even in the case of exceptions).  It is also
-different than the operations we described above.  Methods {\tt
-  readLock} and {\tt writeLock} return objects that then have {\tt
-  lock} and {\tt unlock} methods.  So ``acquire for writing'' could
-look like {\tt lk.writeLock().lock()}.  One advantage of this more
-complicated interface is that some library could provide some clients
-only one of the ``read lock'' or the ``write lock,'' thereby
-restricting which operations the clients can perform.
+C\# {\tt lock} statement supports only regular locks, not
+reader/writer locks.  But C\# standard library has reader/writer
+locks, such as the classes {\tt ReaderWriterLockSlim} 
+and {\tt ReaderWriterLock} in the {\tt System.Threading} namespace. 
+The interface is slightly different than with synchronized statements 
+(you have to be careful to release the lock even in the case of exceptions). 
+It also has slightly different operations than what we described above.  Methods {\tt
+  AcquireReaderLock} and {\tt AcquireWriterLock} allow to specify timeouts 
+  after which lock operation expires, {\tt UpgradeToWriterLock} allows to 
+  switch from reader to writer lock, and property {\tt WriterSeqNum} provides information 
+  on how many threads acquired the writer lock before. However general idea is the same --- 
+  an instance of one of the classes above serves as a lock object, 
+  and methods allow clients to acquire reader or writer locks.
 
 \subsection{Condition Variables}
 \label{sec:condvars}
@@ -5142,29 +5142,41 @@ INEFFICIENT because threads will not stop using resources when they
 cannot proceed.  Instead they keep checking to see if they can
 proceed:
 \begin{verbatim}
-class Buffer<E> {
-   // not shown: an array of fixed size for the queue with two indices
-   // for the front and back, along with methods isEmpty() and isFull()
-   void enqueue(E elt) {
-      while(true) {
-        synchronized(this) {
-           if(!isFull()) {
-              ... do enqueue as normal ...
-              return;
-           }
+class BufferLocksOnly<E>
+{
+    // not shown: an array of fixed size for the queue with two indices
+    // for the front and back, along with methods IsEmpty() and IsFull()
+
+    void Enqueue(E elt)
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                if (!IsFull())
+                {
+                    // do enqueue
+                    return;
+                }
+            }
         }
-      }
-   }
-   E dequeue() {
-      while(true) {
-        synchronized(this) {
-           if(!isEmpty()) {
-              E ans = ... do dequeue as normal ...
-              return ans;
-           }
+    }
+
+    E Dequeue()
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                if (!IsEmpty())
+                {
+                    E result = default(E);
+                    // do dequeue
+                    return result;
+                }
+            }
         }
-      }
-   }
+    }
 }
 \end{verbatim}
 The purpose of condition variables is to avoid this \emph{spinning},
@@ -5185,75 +5197,98 @@ consumers are blocked on an empty queue, wake them up when an enqueue
 occurs.  This cannot be done correctly with just locks, which is
 exactly why condition variables exist.  
 
-In Java, just like every object is a lock, every object is \emph{also}
-a condition variable.  So we will first explain condition variables as
-extra methods that every object has. (Quite literally, the methods are
-defined in the {\tt Object} class.)  We will see later that while this
+In C\#, just like every object can be used as a lock, every object 
+can \emph{also} be used as a condition variable. Necessary operations are 
+provided as static methods of a class {\tt Monitor} in namespace {\tt System.Threading}. 
+So one can turn any single object into conditional variable just by 
+calling methods from {\tt Monitor} on it. We will see later that while this
 set-up is often convenient, associating (only) one condition variable
 with each lock (the same object) is not always what you want.  There
 are three methods:
 \begin{itemize}
-\item {\tt wait} should be called only while holding the lock for the
-  object.  (Typically, the call is to {\tt this.wait} so the lock {\tt
-    this} should be held.)  The call will atomically (a) block the thread,
+\item {\tt Wait} should be called only while holding the lock for the
+  object.  (Say while using {\tt this} as a lock, the call is to 
+  {\tt Monitor.Wait(this)} so the lock {\tt this} should be held.) 
+  The call will atomically (a) block the thread,
   (b) release the lock, and (c) register the thread as
   ``waiting'' to be notified.  (This is the step you cannot reasonably
   implement on your own; there has to be no ``gap'' between the
   lock-release and registering for notification else the thread might ``miss''
   being notified and never wake up.)  When the thread is later woken
-  up it will re-acquire the same lock before {\tt wait} returns.  (If
+  up it will re-acquire the same lock before {\tt Wait} returns.  (If
   other threads also seek the lock, then this may lead to more
   blocking.  There is no guarantee that a notified thread gets the
   lock next.)  Notice the thread then continues as part of a \emph{new
     critical section}; the entire point is that the state of shared
   memory has changed in the meantime while it did not hold the lock.
-\item {\tt notify} wakes up \emph{one} thread that is blocked on this
-  condition variable (i.e., has called {\tt wait} on the same object).
-  If there are no such threads, then {\tt notify} has no effect, but
+\item {\tt Pulse} wakes up \emph{one} thread that is blocked on the
+  condition variable (i.e., has called {\tt Wait} on the same object).
+  If there are no such threads, then {\tt Pulse} has no effect, but
   this is fine.  (And this is why there has to be no ``gap'' in the
-  implementation of {\tt wait}.)  If there are multiple threads
+  implementation of {\tt Wait}.)  If there are multiple threads
   blocked, there is no guarantee which one is notified.
-\item {\tt notifyAll} is like {\tt notify} except it wakes up all the
-  threads blocked on this condition variable.
+\item {\tt PulseAll} is like {\tt Pulse} except it wakes up all the
+  threads blocked on the condition variable.
 \end{itemize}
-The term \emph{wait} is standard, but the others vary in different
-languages.  Sometimes \emph{notify} is called \emph{signal} or
-\emph{pulse}.  Sometimes \emph{notifyAll} is called \emph{broadcast}
-or \emph{pulseAll}.
+The term \emph{Wait} is standard, but the others vary in different
+languages.  Sometimes \emph{pulse} is called \emph{signal} or
+\emph{notify}.  Sometimes \emph{pulse all} is called \emph{broadcast}
+or \emph{notify all}.
 
 Here is a WRONG use of these primitives for our bounded buffer.  It is
 close enough to get the basic idea. Identifying the bugs is
 essential for understanding how to use condition variables correctly.
 \begin{verbatim}
-class Buffer<E> {
-   // not shown: an array of fixed size for the queue with two indices
-   // for the front and back, along with methods isEmpty() and isFull()
-   void enqueue(E elt) {
-      synchronized(this) {
-         if(isFull())
-           this.wait();    
-         ... do enqueue as normal ...
-         if(... buffer was empty (i.e., now has 1 element) ...)
-           this.notify();
-       }
-   }
-  E dequeue() {
-     synchronized(this) {
-        if(isEmpty())
-          this.wait();
-        E ans = ... do dequeue as normal ...
-        if(... buffer was full (i.e., now has room for 1 element) ...)
-          this.notify();
-        return ans;
-     }
-   }
+class BufferWrongNotifyWait<E>
+{
+    // not shown: an array of fixed size for the queue with two indices
+    // for the front and back, along with methods IsEmpty() and IsFull()
+    void Enqueue(E elt)
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                if (IsFull())
+                {
+                    Monitor.Wait(this);
+                }
+                // do enqueue as normal
+                if (...buffer was empty (i.e., now has 1 element) ...)
+                {
+                    Monitor.Pulse(this);
+                }
+            }
+        }
+    }
+
+    E Dequeue()
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                if (IsEmpty())
+                {
+                    Monitor.Wait(this);
+                }
+                E ans = default(E);
+                // E ans = do dequeue as normal
+                if(... buffer was full (i.e., now has room for 1 element) ...)
+                {
+                    Monitor.Pulse(this);
+                }
+                return ans;
+            }
+        }
+    }
 }
 \end{verbatim}
 Enqueue waits if the buffer is full.  Rather than spinning, the thread
 will consume no resources until awakened.  While waiting, it does not
-hold the lock (per the definition of {\tt wait}), which is crucial so
+hold the lock (per the definition of {\tt Wait}), which is crucial so
 other operations can complete.  On the other hand, if the enqueue puts
-one item into an empty queue, it needs to call {\tt notify} in case
+one item into an empty queue, it needs to call {\tt Pulse} in case
 there are dequeuers waiting for data.  Dequeue is symmetric.  Again,
 this is the \emph{idea} --- wait if the buffer cannot handle what you
 need to do and notify others who might be blocked after you change the
@@ -5267,22 +5302,22 @@ tries again, the buffer can undergo other operations by other
 threads.  That is, there is a ``gap'' between the notification and
 when the notified thread actually re-acquires the lock to begin its
 new critical section.  Here is an example bad interleaving with the
-{\tt enqueue} in Thread 1 doing the wrong thing; a symmetric example
-exists for {\tt dequeue}.
+{\tt Enqueue} in Thread 1 doing the wrong thing; a symmetric example
+exists for {\tt Dequeue}.
 \goodbreak
 \begin{verbatim}
 Initially the buffer is full (so Thread 1 blocks)
 
-Thread 1 (enqueue)            Thread 2 (dequeue)      Thread 3 (enqueue)
-------------------            ------------------      -------------------
-if(isFull())
-   this.wait();
+Thread 1 (enqueue)            Thread 2 (dequeue)        Thread 3 (enqueue)
+------------------            ------------------        -------------------
+if(IsFull())
+   Monitor.Wait(this);
                               ... do dequeue ...
                               if(... was full ...)
-                                  this.notify();
-                                                      if(isFull()) (not full: don't wait)
+                                  Monitor.Pulse(this);
+                                                        if(IsFull()) (not full: don't wait)
  
-                                                      ... do enqueue ...           
+                                                        ... do enqueue ...           
 ... do enqueue ... (wrong!)
 \end{verbatim}
 Thread 3 ``snuck in'' and re-filled the buffer before Thread 1 ran again.
@@ -5295,35 +5330,56 @@ and so on.  Fortunately, we know how to check something repeatedly
 until we get the answer we want: a while-loop.  So this version fixes
 this bug, but is still WRONG:
 \begin{verbatim}
-class Buffer<E> {
-   // not shown: an array of fixed size for the queue with two indices
-   // for the front and back, along with methods isEmpty() and isFull()
-   void enqueue(E elt) {
-      synchronized(this) {
-         while(isFull())
-           this.wait();    
-         ... do enqueue as normal ...
-         if(... buffer was empty (i.e., now has 1 element) ...)
-           this.notify();
-       }
-   }
-  E dequeue() {
-     synchronized(this) {
-        while(isEmpty())
-          this.wait();
-        E ans = ... do dequeue as normal ...
-        if(... buffer was full (i.e., now has room for 1 element) ...)
-          this.notify();
-        return ans;
-     }
-   }
+class BufferWrongPartiallyFixed<E>
+{
+    // not shown: an array of fixed size for the queue with two indices
+    // for the front and back, along with methods IsEmpty() and IsFull()
+    void Enqueue(E elt)
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                while (IsFull())
+                {
+                    Monitor.Wait(this);
+                }
+                // do enqueue as normal
+                if (...buffer was empty (i.e., now has 1 element) ...)
+                {
+                    Monitor.Pulse(this);
+                }
+            }
+        }
+    }
+
+    E Dequeue()
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                while (IsEmpty())
+                {
+                    Monitor.Wait(this);
+                }
+                E ans = default(E);
+                // E ans = do dequeue as normal
+                if(... buffer was full (i.e., now has room for 1 element) ...)
+                {
+                    Monitor.Pulse(this);
+                }
+                return ans;
+            }
+        }
+    }
 }
 \end{verbatim}
 The only change is using a while-loop instead of an if-statement for
-deciding whether to {\tt wait}.  \emph{Calls to {\tt wait} should
+deciding whether to {\tt Wait}.  \emph{Calls to {\tt Wait} should
   always be inside while-loops that re-check the condition.}  Not only
 is this in almost every situation the right thing to do for your
-program, but technically for obscure reasons Java is allowed to notify
+program, but technically for obscure reasons .Net is allowed to pulse
 (i.e., wake up) a thread even if your program does not!  So it is
 mandatory to re-check the condition since it is possible that nothing
 changed.  This is still much better than the initial spinning version
@@ -5338,12 +5394,12 @@ Initially the buffer is full (so Threads 1 and 2 block)
 
 Thread 1 (enqueue)         Thread 2 (enqueue)      Thread 3 (two dequeues)
 ------------------         ------------------      ----------------------
-while(isFull())
-   this.wait();
-                           while(isFull())
-                             this.wait();
+while(IsFull())
+   Monitor.Wait(this);
+                           while(IsFull())
+                             Monitor.Wait(thos);
                                                    ... do dequeue ...
-                                                   this.notify();
+                                                   Monitor.Pulse(this);
 
                                                    ... do dequeue ...
                                                    // no notification!
@@ -5354,7 +5410,7 @@ before any enqueue, no notification will be sent, which leaves the
 second blocked thread waiting when it should not wait.  
 
 The simplest solution in this case is to change the code to use {\tt
-  notifyAll} instead of {\tt notify}.  That way, whenever the buffer
+  PulseAll} instead of {\tt Pulse}.  That way, whenever the buffer
   becomes non-empty, \emph{all} blocked producers know about it and
   similarly whenever the buffer becomes non-full, \emph{all} blocked
   consumers wake up.  If there are $n$ blocked threads and there are
@@ -5362,41 +5418,62 @@ The simplest solution in this case is to change the code to use {\tt
   threads will simply block again, but at least this is correct.  So
   this is RIGHT:
 \begin{verbatim}
-class Buffer<E> {
-   // not shown: an array of fixed size for the queue with two indices
-   // for the front and back, along with methods isEmpty() and isFull()
-   void enqueue(E elt) {
-      synchronized(this) {
-         while(isFull())
-           this.wait();    
-         ... do enqueue as normal ...
-         if(... buffer was empty (i.e., now has 1 element) ...)
-           this.notifyAll();
-       }
-   }
-  E dequeue() {
-     synchronized(this) {
-        while(isEmpty())
-          this.wait();
-        E ans = ... do dequeue as normal ...
-        if(... buffer was full (i.e., now has room for 1 element) ...)
-          this.notifyAll();
-        return ans;
-     }
-   }
+class BufferRight<E>
+{
+    // not shown: an array of fixed size for the queue with two indices
+    // for the front and back, along with methods IsEmpty() and IsFull()
+    void Enqueue(E elt)
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                while (IsFull())
+                {
+                    Monitor.Wait(this);
+                }
+                // do enqueue as normal
+                if (...buffer was empty (i.e., now has 1 element) ...)
+                {
+                    Monitor.PulseAll(this);
+                }
+            }
+        }
+    }
+
+    E Dequeue()
+    {
+        while (true)
+        {
+            lock (this)
+            {
+                while (IsEmpty())
+                {
+                    Monitor.Wait(this);
+                }
+                E ans = default(E);
+                // E ans = do dequeue as normal
+                if(... buffer was full (i.e., now has room for 1 element) ...)
+                {
+                    Monitor.PulseAll(this);
+                }
+                return ans;
+            }
+        }
+    }
 }
 \end{verbatim}
-If we do not expect very many blocked threads, this {\tt notifyAll}
+If we do not expect very many blocked threads, this {\tt PulseAll}
 solution is reasonable.  Otherwise, it causes a lot of
 probably-wasteful waking up (just to have $n-1$ threads probably block
 again).  Another tempting solution ALMOST works, but of course
 ``almost'' means ``wrong.''  We could have every enqueue and dequeue
-call {\tt this.notify}, not just if the buffer had been empty or
+call {\tt Monitor.Pulse(this)}, not just if the buffer had been empty or
 full.  (In terms of the code, just replace the if-statements with
-calls {\tt this.notify()}.)  In terms of the interleaving above, the
+calls {\tt Monitor.Pulse(this)}.)  In terms of the interleaving above, the
 first dequeue would wake up one blocked enqueuer and the second
 dequeue would wake up another one.  If no thread is blocked, then the
-{\tt notify} call is unnecessary but does no harm.
+{\tt Pulse} call is unnecessary but does no harm.
 
 The reason this is incorrect is subtle, but here is one scenario where
 the wrong thing happens.  For simplicity, assume the size of the
@@ -5416,12 +5493,13 @@ before there is a problem).
   $T_4$ are blocked even though $T_4$ should enqueue and then $T_2$
   could dequeue.
 \end{enumerate}
-
+------------------------------------------------------------------------------------------------------
 The way to fix this problem is to use \emph{two condition variables}
 --- one for producers to notify consumers and one for consumers to
 notify producers.  But we need both condition variables to be
 ``associated with'' the same lock, since we still need all producers
 and consumers to use one lock to enforce mutual exclusion.  This is
+also supported by the {\tt Monitor} class
 why Java's choice to associate one condition variable with every lock
 is somewhat strange.  However, the Java standard library has a {\tt
   ReentrantLock} class that is more flexible.  It has a {\tt
