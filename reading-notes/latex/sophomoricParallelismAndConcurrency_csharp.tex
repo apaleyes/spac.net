@@ -4758,33 +4758,39 @@ bank-account class that includes a method to transfer money to another
 bank-account.  With what we have learned so far, the following WRONG
 code skeleton looks reasonable:
 \begin{verbatim}
-class BankAccount {
-   ...
-   synchronized void withdraw(int amt) { ... }
-   synchronized void deposit(int amt) { ... }
-   synchronized void transferTo(int amt, BankAccount a) {
-     this.withdraw(amt);
-     a.deposit(amt);
-   }
+class BankAccount
+{
+    [MethodImpl(MethodImplOptions.Synchronized)]
+    void Withdraw(int amt) { }
+
+    [MethodImpl(MethodImplOptions.Synchronized)]
+    void Deposit(int amt) { }
+
+    [MethodImpl(MethodImplOptions.Synchronized)]
+    void TransferToWrong(int amt, BankAccount a)
+    {
+        this.Withdraw(amt);
+        a.Deposit(amt);
+    }
 }
 \end{verbatim}
 This class uses a fine-grained locking strategy where each account has
 its own lock.  There are no data races because the only methods that
 directly access any fields are (we assume) synchronized like {\tt
-  withdraw} and {\tt deposit}, which acquire the correct lock.  More
-subtly, the {\tt transferTo} method appears atomic.  For another
+  Withdraw} and {\tt Deposit}, which acquire the correct lock.  More
+subtly, the {\tt TransferTo} method appears atomic.  For another
 thread to see the intermediate state where the withdraw has occurred
 but not the deposit would require operating on the withdrawn-from
-account.  Since {\tt transferTo} is synchronized, this cannot occur.
+account.  Since {\tt TransferTo} is synchronized, this cannot occur.
 
-Nonetheless, there are interleavings of two {\tt transferTo}
+Nonetheless, there are interleavings of two {\tt TransferTo}
 operations where neither one ever finishes, which is clearly not
 desired.  For simplicity, suppose {\tt x} and {\tt y} are static
 fields each holding a {\tt BankAccount}.  Consider this interleaving
 in pseudocode:
 
 \begin{verbatim}
-Thread 1: x.transferTo(1,y)      Thread 2: y.transferTo(1,x)
+Thread 1: x.TransferTo(1,y)      Thread 2: y.TransferTo(1,x)
 --------------------------       ---------------------------
 acquire lock for x     
 withdraw 1 from x
@@ -4812,18 +4818,19 @@ More generally, a deadlock occurs when there are threads $T_1, T_2,
 In other words, there is a cycle of waiting.  
 
 Returning to our example, there is, unfortunately, no obvious way to
-write an atomic {\tt transferTo} method that will not deadlock.
+write an atomic {\tt TransferTo} method that will not deadlock.
 Depending on our needs we could write:
 \begin{verbatim}
-   void transferTo(int amt, BankAccount a) {
-     this.withdraw(amt);
-     a.deposit(amt);
-   }
+void TransferTo(int amt, BankAccount a)
+{
+    this.Withdraw(amt);
+    a.Deposit(amt);
+}
 \end{verbatim}
-All we have done is make {\tt transferTo} not be synchronized.
-Because {\tt withdraw} and {\tt deposit} are still synchronized
+All we have done is make {\tt TransferTo} not be synchronized.
+Because {\tt Withdraw} and {\tt Deposit} are still synchronized
 methods, the only negative effect is that an intermediate state is
-potentially exposed:  Another thread that retrieved the balances of
+potentially exposed:  another thread that retrieved the balances of
 the two accounts in the transfer could now ``see'' the state where the
 withdraw had occurred but not the deposit.  If that is okay in our
 application, then this is a sufficient solution.  If not, another
@@ -4836,7 +4843,7 @@ but not necessary condition for avoiding deadlock because it cannot
 lead to a cycle of waiting.  A much more flexible
 sufficient-but-not-necessary strategy that subsumes the
 often-unworkable ``only one lock at a time strategy'' works as
-follows: For all pairs of locks $x$ and $y$, either do not have a
+follows: for all pairs of locks $x$ and $y$, either do not have a
 thread ever (try to) hold both $x$ and $y$ simultaneously \emph{or}
 have a globally agreed upon order, meaning either $x$ is always
 acquired before $y$ or $y$ is always acquired before $x$.
@@ -4848,18 +4855,21 @@ order.  It is merely a programming convention that the entire program
 must get right.
 
 To understand how this ordering idea can be useful, we return to our
-{\tt transferTo} example.  Suppose we wanted {\tt transferTo} to be
+{\tt TransferTo} example.  Suppose we wanted {\tt TransferTo} to be
 atomic.  A simpler way to write the code that still has the deadlock
 problem we started with is:
 \begin{verbatim}
-   void transferTo(int amt, BankAccount a) {
-     synchronized(this) {
-       synchronized(a) {
-         this.withdraw(amt);
-         a.deposit(amt);
-       }
-     }
-   }
+void TransferTo(int amt, BankAccount a)
+{
+    lock (this)
+    {
+        lock (a)
+        {
+            this.Withdraw(amt);
+            a.Deposit(amt);
+        }
+    }
+}
 \end{verbatim}
 Here we make explicit that we need the locks guarding both accounts
 and we hold those locks throughout the critical section.  This version
@@ -4871,8 +4881,8 @@ from A to B, thread 2 from B to C, and thread 3 from C to A.)
 
 The critical section has two locks to acquire.  If all threads
 acquired these locks in the same order, then no deadlock could occur.  In
-our deadlock example where one thread calls {\tt x.transferTo(1,y)}
-and the other calls {\tt y.transferTo(1,x)}, this is exactly what goes
+our deadlock example where one thread calls {\tt x.TransferTo(1,y)}
+and the other calls {\tt y.TransferTo(1,x)}, this is exactly what goes
 wrong: one acquires {\tt x} before {\tt y} and the other {\tt y}
 before {\tt x}.  We want one of the threads to acquire the locks in
 the other order.
@@ -4885,26 +4895,35 @@ that every {\tt BankAccount} already has an {\tt acctNumber} field of type
 can use these numbers to require that threads always acquire locks for
 bank accounts in increasing order.  (We could also require decreasing
 order, the key is that all code agrees on one way or the other.)  We
-can then write {\tt transferTo} like this:
+can then write {\tt TransferTo} like this:
 \begin{verbatim}
 class BankAccount {
   ...
-  private int acctNumber; // must be unique
-  void transferTo(int amt, BankAccount a) {
-    if(this.acctNumber < a.acctNumber)
-       synchronized(this) {
-         synchronized(a) {
-            this.withdraw(amt);
-            a.deposit(amt);
-         }
-       }
-    else
-       synchronized(a) {
-         synchronized(this) {
-            this.withdraw(amt);
-            a.deposit(amt);
-         }
-       }
+  private int acctNumber;
+  void transfertToAtomic(int amt, BankAccount a)
+  {
+      if (this.acctNumber < a.acctNumber)
+      {
+          lock (this)
+          {
+              lock (a)
+              {
+                  this.Withdraw(amt);
+                  a.Deposit(amt);
+              }
+          }
+      }
+      else
+      {
+          lock (a)
+          {
+              lock (this)
+              {
+                  this.Withdraw(amt);
+                  a.Deposit(amt);
+              }
+          }
+      }
   }
 }
 \end{verbatim}
@@ -4914,27 +4933,17 @@ should be obvious that it follows the strategy described above.  And
 create a cycle if we acquire locks according to the agreed-upon
 partial order.
 
-In practice, methods like {\tt transferTo} where we have two instances
-of the same class are a difficult case to handle.  Even in the Java
-standard library it does not always work well: The {\tt StringBuffer}
-class has an {\tt append} method that is subject to race conditions
-(bad interleavings) because the only way to avoid it would be to
-create a possible deadlock.  With no clear, efficient solution
-(buffers do not have unique identifiers like bank accounts), the
-documentation for {\tt StringBuffer} indicates that clients of the
-library must use their own synchronization to prevent calls to {\tt
-  append} from interleaving with other methods that change the
-contents or size of a {\tt StringBuffer}.
-
-Fortunately, there are other situations where preventing deadlock
+In practice, methods like {\tt TransferTo} where we have two instances
+of the same class are a difficult case to handle. Fortunately, 
+there are other situations where preventing deadlock
 amounts to fairly simple rules about the order that locks are
 acquired.  Here are two examples:
 \begin{itemize}
 \item If you have two different types of objects, you can order the
   locks by the types of data they protect.  For example, the
-  documentation could state, ``When moving an item from the hashtable
+  documentation could state, ``When moving an item from the dictionary
   to the work queue, never try to acquire the queue's lock while
-  holding the hashtable's lock (the other order is acceptable).''
+  holding the dictionary's lock (the other order is acceptable).''
 \item If you have an acyclic data structure like a tree, you can use
   the references in the data structure to define the locking order.
   For example, the documentation could state, ``If holding a lock for
