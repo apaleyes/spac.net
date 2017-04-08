@@ -5493,22 +5493,15 @@ before there is a problem).
   $T_4$ are blocked even though $T_4$ should enqueue and then $T_2$
   could dequeue.
 \end{enumerate}
-------------------------------------------------------------------------------------------------------
+
 The way to fix this problem is to use \emph{two condition variables}
 --- one for producers to notify consumers and one for consumers to
 notify producers.  But we need both condition variables to be
 ``associated with'' the same lock, since we still need all producers
 and consumers to use one lock to enforce mutual exclusion.  This is
-also supported by the {\tt Monitor} class
-why Java's choice to associate one condition variable with every lock
-is somewhat strange.  However, the Java standard library has a {\tt
-  ReentrantLock} class that is more flexible.  It has a {\tt
-  newCondition} method that lets you associate as many condition
-variables as you want with the same lock.  You then call {\tt wait}
-and {\tt notify} on these separate condition objects.  In other
-languages and libraries, it is common for locks and condition
-variables to be separate things entirely, leaving it up to the
-programmer to manually associate each condition variable with a lock.
+also supported by the {\tt Monitor} class, which allows one to create 
+as many conditional variables as needed. You can call {\tt Wait} and 
+{\tt Pulse} on any of those individual variables as needed.
 
 In any case, condition variables are:
 \begin{itemize}
@@ -5521,10 +5514,10 @@ In any case, condition variables are:
 In practice, condition variables tend to be used in very stylized
 ways.  Moreover, it is rare that you need to use condition variables
 explicitly rather than using a library that internally uses condition
-variables.  For example, the Java standard library already has a class
-{\tt java.util.concurrent.ArrayBlockingQueue<E>} that is exactly what
-we need for a bounded buffer.  (It uses the names {\tt put} and {\tt
-  take} rather than {\tt enqueue} and {\tt dequeue}.)  It is good to
+variables.  For example, since .Net 4 standard library includes a class
+{\tt System.Collections.Concurrent.BlockingCollection<T>} that is exactly what
+we need for a bounded buffer.  (It uses the names {\tt Add} and {\tt
+  Take} rather than {\tt enqueue} and {\tt dequeue}.)  It is good to
 know that any blocking caused by calls to the library will be
 efficient thanks to condition variables, but we do not need to write
 or understand the condition-variable code.
@@ -5562,25 +5555,43 @@ Here is an incomplete list of other primitives you may encounter:
   operations, called $P$ and $V$ for historical reasons, increment or
   decrement a counter.  There are rules about how these operations are
   synchronized and when they block.  Semaphores can be easily used to
-  implement locks as well as barriers.
+  implement locks as well as barriers. .Net standard library provides
+  {\tt System.Threading.Semaphore} class that implements this primitive.
 \item \emph{Barriers} are a bit more like {\tt join} and are often
   more useful in parallel programming than concurrent programming.
   When threads get to a barrier, they block until $n$ of them (where
   $n$ is a property of the barrier) reach the barrier.  Unlike {\tt
   join}, the synchronization is not waiting for \emph{one} other
   thread to \emph{terminate}, but rather $n$ other threads to
-  \emph{get to the barrier}.
+  \emph{get to the barrier}. Again, {\tt System.Threading.Barrier} 
+  is the implementation of this primitive in .Net.
 \item \emph{Monitors} provide synchronization that corresponds more
   closely to the structure of your code.  Like an object, they can
   encapsulate some private state and provide some entry points
   (methods).  As synchronization, the basic idea is that only one
   thread can call any of the methods at a time, with the others
-  blocking.  This is \emph{very} much like an object in Java where all
-  the methods are synchronized on the {\tt this} lock, which is
-  exactly Java's standard idiom.  Therefore, it is not uncommon for
-  Java's locks to be called monitors.  We did not use this term
-  because the actual primitive Java provides is a reentrant lock even
-  though the common idiom is to code up monitors using this primitive.
+  blocking.  This is \emph{very} much like an objects we've seen before 
+  where all the methods are synchronized on some lock, say {\tt this}.
+  So it should come at no surprise that C\# {\tt lock} keyword is a just 
+  a shortcut for this code (C\# 4 or later):
+\begin{verbatim}
+bool lockWasTaken = false;
+var temp = obj;
+try
+{
+    Monitor.Enter(temp, ref lockWasTaken);
+    ...code inside "lock" goes here...
+}
+finally
+{
+    if (lockWasTaken)
+    {
+        Monitor.Exit(temp);
+    }
+}
+\end{verbatim}
+  Thus {\tt Monitor} class in C\# actually provides means to implement
+  \emph{Lock}, \emph{Re-entrant Lock} and \emph{Monitor} primitives. 
 \end{itemize}
 
 \end{document}
