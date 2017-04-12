@@ -52,7 +52,7 @@ parallelism and concurrency --- and certainly not in a central place
 such that subsequent courses can rely on it.  These days, most desktop
 and laptop computers have multiple cores.  Modern high-level languages
 have threads built into them and standard libraries use threads (e.g.,
-Java's Swing library for GUIs).  It no longer seems reasonable to
+Windows Presentation Foundantion in .NET Framework).  It no longer seems reasonable to
 bring up threads ``as needed'' or delay until an operating-systems
 course that should be focusing on operating systems.  There is no
 reason to introduce threads first in C or assembly when all the usual
@@ -105,8 +105,8 @@ very well.  Here are some reasons:
   for reader/writer locks, parallel unstructured graph traversals,
   etc.  Making a data structure ``thread-safe'' is an ideal way to
   think about what it means to be ``thread-safe.''
-\item We already used Java in the course.  Java 7 (and higher)'s ForkJoin framework
-  is excellent for teaching fork-join parallelism.  Java's built-in
+\item We already used C\# in the course.  .NET 4 (and higher)'s Task Parallel Library
+  is excellent for teaching fork-join parallelism.  C\# built-in
   support for threads, locks, and condition variables is sufficient
   for teaching concurrency.  
 \end{itemize}
