@@ -121,7 +121,7 @@ probably better covered in a course on systems programming, though one
 could add them to these notes.
 
 While most of the material is these notes is not specific to a
-particular programming language, all examples and discussions use Java
+particular programming language, all examples and discussions use C\#
 when a specific language is warranted.  A C++ version of these
 materials is also available thanks to Steve Wolfman from
 the University of British Columbia.  Porting to additional languages
@@ -237,8 +237,8 @@ Labs University Collaborations.
 In \emph{sequential programming}, one thing happens at a time.
 Sequential programming is what most people learn first and how most
 programs are written.  Probably every program you have written in C\#
-(or a similar language) is sequential: Execution starts at the
-beginning of \texttt{main} and proceeds one assignment / call / return
+(or a similar language) is sequential: execution starts at the
+beginning of \texttt{Main} and proceeds one assignment / call / return
 / arithmetic operation at a time.
 
 Removing the one-thing-at-a-time assumption complicates writing
@@ -527,7 +527,7 @@ easier to understand threads:
 \begin{itemize}
 \item When a new thread starts running, it will have its own new call
   stack.  It will have one frame on it, which is \emph{like} that thread's
-  {\tt main}, but it won't actually be {\tt main}.
+  {\tt Main}, but it won't actually be {\tt Main}.
 \item When a thread returns from its first method, it terminates.
 \item Each thread has its own program counter and local variables, so
   there is no ``interference'' from other threads for these things.
@@ -563,7 +563,7 @@ writer is done.  We will present such primitives as we need them.
 To create a new thread in C\# requires that you define a new method
 (step 1) and then perform two actions at run-time (steps 2--3):
 \begin{enumerate}
-\item Define a method that takes does the intended work and returns
+\item Define a method that does the intended work and returns
   {\tt void}. It must take no arguments, but the example below shows
   how to work around this inconvenience. Let's call this method {\tt Run}.
 \item Create an instance of the class {\tt System.Threading.Thread} and
@@ -760,7 +760,8 @@ Most of this section will consider the problem of computing the sum of
 an array of integers.  An $O(n)$ sequential solution to this problem
 is trivial:
 \begin{verbatim}
-int Sum(int[] arr) {
+int Sum(int[] arr)
+{
     int ans = 0;
     for (int i = 0; i < arr.Length; i++)
         ans += arr[i];
@@ -806,7 +807,7 @@ Here, then, is a pseudocode solution to using 4 processors to sum an
 array.  Note it is essential that we store the 4 partial results in
 separate locations to avoid any interference between loop
 iterations.\footnote{We must take care to avoid bugs due to
-  integer-division truncation with the arguments to {\tt sumRange}.
+  integer-division truncation with the arguments to {\tt SumRange}.
   We need to process each array element exactly once even if {\tt len} is
   not divisible by 4.  This code is correct; notice in particular that
   {\tt ((i+1)*len)/4} will always be {\tt len} when {\tt i==3} because
@@ -818,15 +819,19 @@ iterations.\footnote{We must take care to avoid bugs due to
   \emph{not} be correct.}
 \goodbreak
 \begin{verbatim}
-int Sum(int[] arr) {
+int Sum(int[] arr)
+{
     results = new int[4];
     len = arr.Length;
-    FORALL(i=0; i < 4; ++i) {
+    FORALL(i=0; i < 4; ++i)
+    {
         results[i] = sumRange(arr,(i*len)/4,((i+1)*len)/4);
     }
     return results[0] + results[1] + results[2] + results[3];
 }
-int SumRange(int[] arr, int lo, int hi) {
+
+int SumRange(int[] arr, int lo, int hi)
+{
     result = 0;
     for(j=lo; j < hi; ++j)
         result += arr[j];
@@ -939,7 +944,7 @@ another for-loop to {\tt Sum} in-between the two loops already there
 to make sure all the helper threads finish before we add together the results:
 \begin{verbatim}
 for(int i=0; i < 4; i++)
-   ts[i].Join();
+   t[i].Join();
 \end{verbatim}
 Notice it is the main thread that is calling {\tt Join}, which takes
 no arguments.  On the first loop iteration, the main thread will block
@@ -1213,7 +1218,8 @@ Sections~\ref{sec:divide-conquer} and~\ref{sec:dotnet-tpl}.
   now the results combining reimplements the original sequential
   algorithm.  In short, we need a better way to combine results.
 \item C\# threads were not designed for small tasks like adding
-  1000 numbers.  They will work and produce the correct answer, but
+  1000 numbers.  They will work and produce the correct answer 
+  (only if setup correctly - details are mentioned later on), but
   the constant-factor overheads of creating a C\# thread are far too
   large.  A C\# program that creates 100,000 threads on a small
   desktop computer is unlikely to run well at all --- each thread just
@@ -1327,11 +1333,11 @@ the threads.
 
 To start, here is the algorithm directly translated into C\#,
 omitting some boilerplate like putting the main {\tt Sum} method in a
-class and handling exceptions.\footnote{This may fail to compute the 
- correct result in default .Net settings. By default every thread in 32 
- bit app gets 1 Mb of memory in .Net. And the whole app gets 2 Gb. So 
+class and handling exceptions.\footnote{This program may fail to compute the 
+ correct result in default .NET settings. By default every thread in 32 
+ bit app gets 1 Mb of memory in .NET. And the whole app gets 2 Gb. So 
  creating about 2000 threads can easily make app run out of memory. 
- The .Net Task Parallel Library introduced in Section~\ref{sec:dotnet-tpl} 
+ The .NET Task Parallel Library introduced in Section~\ref{sec:dotnet-tpl} 
  does not have this problem.}
 \begin{verbatim}
 class SumRange
@@ -1379,11 +1385,11 @@ public static int Sum(int[] arr)
     return s.Answer;
 }
 \end{verbatim}
-Notice how each thread creates two helper threads {\tt left} and {\tt
-  right} and then waits for them to finish.  Crucially, the calls to
-  {\tt left.Start} \emph{and} {\tt right.Start} precede the calls to
-{\tt left.Join} \emph{and} {\tt right.Join}.  If for example, {\tt
-  left.Join()} came before {\tt right.Start()}, then the algorithm
+Notice how each thread creates two helper threads {\tt leftThread} and {\tt
+  rightThread} and then waits for them to finish.  Crucially, the calls to
+  {\tt leftThread.Start()} \emph{and} {\tt rightThread.Start()} precede the calls to
+  {\tt leftThread.Join()} \emph{and} {\tt rightThread.Join()}.  If for example, {\tt
+  leftThread.Join()} came before {\tt rightThread.Start()}, then the algorithm
   would have no effective parallelism whatsoever.  It would still
   produce the correct answer, but so would the original much simpler
   sequential program.
@@ -1555,13 +1561,13 @@ programming.  We will return to C\# threads when we learn
 concurrency because the synchronization operations we will use work
 with C\# threads.
 
-\subsection{The .Net Task Parallel Library}
+\subsection{The .NET Task Parallel Library}
 \label{sec:dotnet-tpl}
 
-.Net 4 (and higher) includes classes in the {\tt System.Threading} and {\tt System.Threading.Tasks} namespaces
+.NET 4 (and higher) includes classes in the {\tt System.Threading} and {\tt System.Threading.Tasks} namespaces
 designed exactly for the kind of fine-grained fork-join parallel
 computing these notes use.  In addition to supporting lightweight
-threads (which the library calls Tasks) that are small enough
+threads (which the library calls \emph{tasks}) that are small enough
 that even a million of them should not overwhelm the system, the
 implementation includes a scheduler and run-time system with provably
 optimal expected-time guarantees, as described in
@@ -1595,7 +1601,7 @@ after the first version.
 \begin{verbatim}
 using System.Threading.Tasks;
 
-public class  public class DivideAndConquerTaskParallel
+public class DivideAndConquerTaskParallel
 {
     class SumRange
     {
@@ -1739,7 +1745,7 @@ Here are the differences from the version that uses non-generic {\tt
 \begin{itemize}
 \item {\tt Answer} property is gone.
 \item {\tt Run} returns an integer as a result of computation.
-\item We use {tt Task<int>} instead of {\tt Task}.
+\item We use {tt Task$<$int$>$} instead of {\tt Task}.
 \item Tasks now have an additional property {\tt Result} which we 
  use to get result of a task run.
 \end{itemize}
