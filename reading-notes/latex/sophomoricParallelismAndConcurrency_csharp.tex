@@ -1862,10 +1862,11 @@ would be multiplying every element of an array by 2.  An example using
 two inputs and producing a separate output would be vector addition.
 Using pseudocode, we could write:
 \begin{verbatim}
-int[] add(int[] arr1, int[] arr2) {
-  assert(arr1.length == arr2.length);
-  int[] ans = new int[arr1.length];
-  FORALL(int i=0; i < arr1.length; i++)
+int[] Add(int[] arr1, int[] arr2)
+{
+  assert(arr1.Length == arr2.Length);
+  int[] ans = new int[arr1.Length];
+  FORALL(int i=0; i < arr1.Length; i++)
     ans[i] = arr1[i] + arr2[i];
   return ans;
 }
