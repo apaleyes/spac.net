@@ -2621,11 +2621,12 @@ computation.
   array.  In pseudocode, calling the result of step (1) {\tt
   bitvector} and the result of step (2) {\tt bitsum}:
 \begin{verbatim}
-  int output_length = bitsum[bitsum.length-1];
+  int output_length = bitsum[bitsum.Length - 1];
   int[] output = new int[output_length];
-  FORALL(int i=0; i < input.length; i++) {
-     if(bitvector[i]==1)
-       output[bitsum[i]-1] = input[i];
+  FORALL(int i = 0; i < input.Length; i++)
+  {
+     if (bitvector[i] == 1)
+       output[bitsum[i] - 1] = input[i];
   }
 \end{verbatim}
 Note it is also possible to do step (3) using only {\tt bitsum} and
