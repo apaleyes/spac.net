@@ -2916,8 +2916,8 @@ difficult, it is exceedingly important to design them well using
 well-understood design principles (see Section~\ref{sec:guidelines}) from the
 beginning.
 
-As an example, suppose a bank-account class has methods {\tt deposit}
-and {\tt withdraw}.  Suppose the latter throws an exception if the
+As an example, suppose a bank-account class has methods {\tt Deposit}
+and {\tt Withdraw}.  Suppose the latter throws an exception if the
 amount to be withdrawn is larger than the current balance.  If one
 thread deposits into the account and another thread withdraws from the
 account, then whether the withdrawing thread throws an exception
@@ -3517,11 +3517,11 @@ methods of {\tt acct} do, ensuring mutual exclusion.  That is, {\tt
   DoubleBalance} will not be interleaved with other operations on the
 same account.
 
-Because this idiom is so common, C\# has one more shortcut to save
-you a few keystrokes.  When an entire method body should be
+Because this idiom is so common, C\# has one more shortcut to keep 
+the code a bit cleaner.  When an entire method body should be
 synchronized on {\tt this}, we can omit the {\tt lock} statement and
 instead decorate a method or a property with the attribute 
-{\tt MethodImpl(MethodImplOptions.Synchronized)}.  This is just a shorter 
+{\tt MethodImpl(MethodImplOptions.Synchronized)}.  This is just another 
 way of saying the same thing.  So our FINAL VERSION looks like this:
 \begin{verbatim}
 public class BankAccountMethodImplSync
@@ -3568,13 +3568,13 @@ simultaneously.  Here is a subtle BUG emphasizing this point, assuming
 \begin{verbatim}
 void SomeMethod()
 {
-	lock(arr[i])
-	{
-		if(SomeCondition()) {
-		    arr[i] = new Foo();
-		}
-		// some more statements using arr[i]
-	}
+    lock(arr[i])
+    {
+        if (SomeCondition()) {
+            arr[i] = new Foo();
+        }
+        // some more statements using arr[i]
+    }
 }
 \end{verbatim}
 If one thread executes this method and {\tt SomeCondition()} evaluates
