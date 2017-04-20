@@ -3759,11 +3759,11 @@ have to be assigned to some thread-shared location before a second
 thread could use it, and such an assignment will not happen until
 after the constructor finishes executing.\footnote{This would not
   necessarily be the case if the constructor did something like 
-  {\tt someObject.f = this;}, but doing such things in constructors is
+  {\tt someObject.F = this;}, but doing such things in constructors is
   usually a bad idea.}
 
 Now suppose we want to implement a new operation for our stack called
-{\tt peek} that returns the newest
+{\tt Peek} that returns the newest
 not-yet-popped element in the stack without popping it.  (This
 operation is also sometimes called {\tt Top}.) A correct
 implementation would be:
@@ -3860,7 +3860,7 @@ it.  If one thread calls {\tt IsEmpty} and the other calls {\tt
 Thread 1                    Thread 2 (calls WrongStackHelper.PeekHelper<>)
 --------                    ----------------------------------
                             E ans = stk.Pop();
-boolean b = IsEmpty();
+bool b = IsEmpty();
                             stk.Push(ans);
                             return ans;
 \end{verbatim}
@@ -3960,7 +3960,7 @@ sections such that every possible thread schedule is correct.  Because
 have to worry about calls to these methods being interleaved with each
 other.  To implement {\tt Peek} correctly, the key insight is to
 realize that its intermediate state must not be visible and therefore
-we need its calls to {\tt Pop} and {\tt push} to be part of \emph{one}
+we need its calls to {\tt Pop} and {\tt Push} to be part of \emph{one}
 critical section instead of two separate critical sections.  As
 Section~\ref{sec:guidelines} discusses in more detail, making your
 critical sections large enough --- but not too large --- is an
@@ -4037,7 +4037,7 @@ explains why the assertion can fail anyway.
   {\tt F} begins, then {\tt x} and {\tt y} are both 0, so the
   assertion holds.
 \item So we need only concern ourselves with a call to {\tt G} that is
-  interleaved with the first call to {\tt f}.  One way to proceed is
+  interleaved with the first call to {\tt F}.  One way to proceed is
   to consider all possible interleavings of the lines marked A, B, C,
   and D and show the assertion holds under all of them.  Because A
   must precede B and C must precede D, there are only 6 such
@@ -4073,7 +4073,7 @@ the compiler \emph{would} do this reordering.  The point is that it is
 \emph{allowed to}, and in more complicated examples with code
 containing loops and other features there are reasons to do so.  Once
 such a reordering is allowed, the assertion is allowed to fail.
-Whether it will ever do so depends on exactly how a particular Java
+Whether it will ever do so depends on exactly how a particular C\#
 implementation works.
 
 Similarly, in hardware, there isn't \emph{really} one single shared
@@ -4120,7 +4120,7 @@ races, it might be more difficult to debug.
 
 \subsubsection{Avoiding Data Races}
 
-To avoid data races, we need synchronization.  Given Java's locks,
+To avoid data races, we need synchronization.  Given C\# locks,
 which we already know about, we could rewrite our example from
 Section~\ref{sec:data-race-example} as follows:
 \begin{verbatim}
