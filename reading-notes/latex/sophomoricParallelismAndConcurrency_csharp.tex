@@ -4359,7 +4359,7 @@ class Name
     }
 }
 \end{verbatim}
-Suppose we want to write a method that looks up a student by id in 
+Suppose we want to write a method that looks up a student by ID in 
 some table and returns the name, but using a middle initial instead of
 the full middle name.  The following direct solution is probably the
 BEST STYLE:
@@ -4382,7 +4382,7 @@ While this code produces the right answer, it has the
 the Name object is \emph{still in the table}.  Actually, this depends on how the
 {\tt Lookup} method is implemented.  We assume here it returns a
 reference to the object in the table, rather than creating a new 
-  Name object.  If Name objects are not mutated, then returning an
+  {\tt Name} object.  If {\tt Name} objects are not mutated, then returning an
   alias is simpler and more efficient.  Under this assumption, the
   full middle name for some student has been \emph{replaced} in the
   table by the middle initial, which is presumably a bug.
@@ -4418,7 +4418,7 @@ The solution is to make a copy of the object and, if necessary, mutate the
 \end{verbatim}
 
 Note that it is no problem for multiple threads to lookup up the same
-Name object at the same time.  They will all \emph{read} the same
+{\tt Name} object at the same time.  They will all \emph{read} the same
 fields of the same object (they all have aliases to it), but
 simultaneous reads never lead to race conditions.  It is like
 multiple pedestrians reading the same street sign at the same time:
