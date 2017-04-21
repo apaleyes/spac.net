@@ -5078,7 +5078,7 @@ C\# {\tt lock} statement supports only regular locks, not
 reader/writer locks.  But C\# standard library has reader/writer
 locks, such as the classes {\tt ReaderWriterLockSlim} 
 and {\tt ReaderWriterLock} in the {\tt System.Threading} namespace. 
-The interface is slightly different than with synchronized statements 
+The interface is slightly different than with {\tt lock} statement or {\tt Synchronized} attribute 
 (you have to be careful to release the lock even in the case of exceptions). 
 It also has slightly different operations than what we described above.  Methods {\tt
   AcquireReaderLock} and {\tt AcquireWriterLock} allow to specify timeouts 
@@ -5150,7 +5150,7 @@ INEFFICIENT because threads will not stop using resources when they
 cannot proceed.  Instead they keep checking to see if they can
 proceed:
 \begin{verbatim}
-class BufferLocksOnly<E>
+class Buffer<E>
 {
     // not shown: an array of fixed size for the queue with two indices
     // for the front and back, along with methods IsEmpty() and IsFull()
@@ -5247,7 +5247,7 @@ Here is a WRONG use of these primitives for our bounded buffer.  It is
 close enough to get the basic idea. Identifying the bugs is
 essential for understanding how to use condition variables correctly.
 \begin{verbatim}
-class BufferWrongNotifyWait<E>
+class Buffer<E>
 {
     // not shown: an array of fixed size for the queue with two indices
     // for the front and back, along with methods IsEmpty() and IsFull()
@@ -5338,7 +5338,7 @@ and so on.  Fortunately, we know how to check something repeatedly
 until we get the answer we want: a while-loop.  So this version fixes
 this bug, but is still WRONG:
 \begin{verbatim}
-class BufferWrongPartiallyFixed<E>
+class Buffer<E>
 {
     // not shown: an array of fixed size for the queue with two indices
     // for the front and back, along with methods IsEmpty() and IsFull()
@@ -5387,7 +5387,7 @@ The only change is using a while-loop instead of an if-statement for
 deciding whether to {\tt Wait}.  \emph{Calls to {\tt Wait} should
   always be inside while-loops that re-check the condition.}  Not only
 is this in almost every situation the right thing to do for your
-program, but technically for obscure reasons .Net is allowed to pulse
+program, but technically for obscure reasons .NET is allowed to pulse
 (i.e., wake up) a thread even if your program does not!  So it is
 mandatory to re-check the condition since it is possible that nothing
 changed.  This is still much better than the initial spinning version
@@ -5426,7 +5426,7 @@ The simplest solution in this case is to change the code to use {\tt
   threads will simply block again, but at least this is correct.  So
   this is RIGHT:
 \begin{verbatim}
-class BufferRight<E>
+class Buffer<E>
 {
     // not shown: an array of fixed size for the queue with two indices
     // for the front and back, along with methods IsEmpty() and IsFull()
@@ -5491,10 +5491,10 @@ before there is a problem).
 \item Assume the buffer starts empty.
 \item Then two threads $T_1$ and $T_2$ block trying to dequeue.
 \item Then one thread $T_3$ enqueues (filling the buffer) and calls
-  {\tt notify}.  Suppose this wakes up $T_1$.
+  {\tt Pulse}.  Suppose this wakes up $T_1$.
 \item But before $T_1$ re-acquires the lock, another thread $T_4$
   tries to enqueue and blocks (because the buffer is still full).
-\item Now $T_1$ runs, emptying the buffer and calling {\tt notify},
+\item Now $T_1$ runs, emptying the buffer and calling {\tt Pulse},
   \emph{but in a stroke of miserable luck this wakes up $T_2$ instead
   of $T_4$}.
 \item $T_2$ will see an empty buffer and wait again.  So now $T_2$ and
@@ -5509,7 +5509,7 @@ notify producers.  But we need both condition variables to be
 and consumers to use one lock to enforce mutual exclusion.  This is
 also supported by the {\tt Monitor} class, which allows one to create 
 as many conditional variables as needed. You can call {\tt Wait} and 
-{\tt Pulse} on any of those individual variables as needed.
+{\tt Pulse} on any of those individual variables as required.
 
 In any case, condition variables are:
 \begin{itemize}
@@ -5522,10 +5522,10 @@ In any case, condition variables are:
 In practice, condition variables tend to be used in very stylized
 ways.  Moreover, it is rare that you need to use condition variables
 explicitly rather than using a library that internally uses condition
-variables.  For example, since .Net 4 standard library includes a class
+variables.  For example, starting from .NET 4 standard library includes a class
 {\tt System.Collections.Concurrent.BlockingCollection<T>} that is exactly what
 we need for a bounded buffer.  (It uses the names {\tt Add} and {\tt
-  Take} rather than {\tt enqueue} and {\tt dequeue}.)  It is good to
+  Take} rather than {\tt Enqueue} and {\tt Dequeue}.)  It is good to
 know that any blocking caused by calls to the library will be
 efficient thanks to condition variables, but we do not need to write
 or understand the condition-variable code.
@@ -5563,7 +5563,7 @@ Here is an incomplete list of other primitives you may encounter:
   operations, called $P$ and $V$ for historical reasons, increment or
   decrement a counter.  There are rules about how these operations are
   synchronized and when they block.  Semaphores can be easily used to
-  implement locks as well as barriers. .Net standard library provides
+  implement locks as well as barriers. .NET standard library provides
   {\tt System.Threading.Semaphore} class that implements this primitive.
 \item \emph{Barriers} are a bit more like {\tt join} and are often
   more useful in parallel programming than concurrent programming.
@@ -5572,7 +5572,7 @@ Here is an incomplete list of other primitives you may encounter:
   join}, the synchronization is not waiting for \emph{one} other
   thread to \emph{terminate}, but rather $n$ other threads to
   \emph{get to the barrier}. Again, {\tt System.Threading.Barrier} 
-  is the implementation of this primitive in .Net.
+  is the implementation of this primitive in .NET.
 \item \emph{Monitors} provide synchronization that corresponds more
   closely to the structure of your code.  Like an object, they can
   encapsulate some private state and provide some entry points
