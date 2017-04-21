@@ -4775,7 +4775,7 @@ class BankAccount
     void Deposit(int amt) { }
 
     [MethodImpl(MethodImplOptions.Synchronized)]
-    void TransferToWrong(int amt, BankAccount a)
+    void TransferTo(int amt, BankAccount a)
     {
         this.Withdraw(amt);
         a.Deposit(amt);
@@ -4908,7 +4908,7 @@ can then write {\tt TransferTo} like this:
 class BankAccount {
   ...
   private int acctNumber;
-  void transfertToAtomic(int amt, BankAccount a)
+  void TransferTo(int amt, BankAccount a)
   {
       if (this.acctNumber < a.acctNumber)
       {
